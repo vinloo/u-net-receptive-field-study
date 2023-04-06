@@ -98,7 +98,8 @@ def process_breast_cancer_data(val_rate, test_rate):
 
 def main():
     clear_data()
-    process_fetal_head_data(0.2, 0.1)
+    # uncomment whichever dataset you want to preprocess
+    # process_fetal_head_data(0.2, 0.1)
     process_breast_cancer_data(0.2, 0.1)
 
 

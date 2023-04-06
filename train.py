@@ -1,15 +1,15 @@
 import glob
 import os
 import torch
+import matplotlib.pyplot as plt
+import numpy as np
 from PIL import Image
 from unet import UNet
 from torch.utils.data import DataLoader, Dataset
 from configurations.default import config as default_config
 from typing import Optional
 from tqdm import tqdm, trange
-import matplotlib.pyplot as plt
 
-import numpy as np
 
 class SegmentationDataset(Dataset):
     def __init__(self,
@@ -40,7 +40,8 @@ class SegmentationDataset(Dataset):
         x = np.array(x)
         y = np.array(y)
 
-        x, y = torch.from_numpy(x).type(self.inputs_dtype).unsqueeze(0), torch.from_numpy(y).type(self.masks_dtype).unsqueeze(0)
+        x, y = torch.from_numpy(x).type(self.inputs_dtype).unsqueeze(
+            0), torch.from_numpy(y).type(self.masks_dtype).unsqueeze(0)
 
         return x, y
 
@@ -54,15 +55,12 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         training_dataloader: Dataset,
         validation_dataloader: Optional[Dataset] = None,
-        lr_scheduler = None,
         epochs: int = 100,
         epoch: int = 0,
     ):
-
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
-        self.lr_scheduler = lr_scheduler
         self.training_dataloader = training_dataloader
         self.validation_dataloader = validation_dataloader
         self.device = device
@@ -73,25 +71,16 @@ class Trainer:
         self.validation_loss = []
         self.learning_rate = []
 
-    def run_trainer(self):          
-
+    def run_trainer(self):
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
             self.epoch += 1
             self._train()
             self._validate()
 
-            if self.lr_scheduler is not None:
-                if self.lr_scheduler.__class__.__name__ == "ReduceLROnPlateau":
-                    self.lr_scheduler.batch(
-                        self.validation_loss[i]
-                    )  
-                else:
-                    self.lr_scheduler.batch()
         return self.training_loss, self.validation_loss, self.learning_rate
 
     def _train(self):
-
         self.model.train()
         train_losses = []
         batch_iter = tqdm(
@@ -104,15 +93,15 @@ class Trainer:
         for _, (x, y) in batch_iter:
             input_x, target_y = x.to(self.device), y.to(
                 self.device
-            ) 
+            )
             self.optimizer.zero_grad()
             out = self.model(input_x)
             # print(str(out[0,0,:,:]))
-            loss = self.criterion(out[0,0,:,:], target_y[0,0,:,:])
+            loss = self.criterion(out[0, 0, :, :], target_y[0, 0, :, :])
             loss_value = loss.item()
             train_losses.append(loss_value)
             loss.backward()
-            self.optimizer.step() 
+            self.optimizer.step()
 
             batch_iter.set_description(
                 f"Training: (loss {loss_value:.4f})"
@@ -124,7 +113,6 @@ class Trainer:
         batch_iter.close()
 
     def _validate(self):
-
         self.model.eval()
         valid_losses = []
         batch_iter = tqdm(
@@ -134,21 +122,21 @@ class Trainer:
             leave=False,
         )
 
-        for i, (x, y) in batch_iter:
+        for _, (x, y) in batch_iter:
             input, target = x.to(self.device), y.to(
                 self.device
-            ) 
+            )
 
             with torch.no_grad():
                 out = self.model(input)
-                loss = self.criterion(out[0,0,:,:], target[0,0,:,:])
+                loss = self.criterion(out[0, 0, :, :], target[0, 0, :, :])
                 loss_value = loss.item()
                 valid_losses.append(loss_value)
 
-                batch_iter.set_description(f"Validation: (loss {loss_value:.4f})")
+                batch_iter.set_description(
+                    f"Validation: (loss {loss_value:.4f})")
 
         self.validation_loss.append(np.mean(valid_losses))
-
         batch_iter.close()
 
 
@@ -166,22 +154,24 @@ class BinaryDiceLoss(torch.nn.Module):
         return loss.mean()
 
 
-
 if __name__ == "__main__":
+
+    # TODO: Make code work for batch size >1
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
     inputs_train = glob.glob(os.path.join("data/preprocessed/train", "*.png"))
-    masks_train = glob.glob(os.path.join("data/preprocessed/train/masks", "*.png"))
+    masks_train = glob.glob(os.path.join(
+        "data/preprocessed/train/masks", "*.png"))
     inputs_val = glob.glob(os.path.join("data/preprocessed/train", "*.png"))
-    masks_val = glob.glob(os.path.join("data/preprocessed/train/masks", "*.png"))
-
+    masks_val = glob.glob(os.path.join(
+        "data/preprocessed/train/masks", "*.png"))
 
     dataset_train = SegmentationDataset(inputs_train, masks_val)
     dataset_val = SegmentationDataset(inputs_val, masks_val)
     dataloader_train = DataLoader(dataset_train, batch_size=1, shuffle=True)
     dataloader_val = DataLoader(dataset_val, batch_size=1, shuffle=True)
-
 
     model = UNet(default_config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -203,8 +193,3 @@ if __name__ == "__main__":
     plt.plot(trainer.validation_loss, label="Validation loss")
     plt.legend()
     plt.show()
-
-
-
-
-

@@ -1,20 +1,20 @@
 import torch
 import torch.nn as nn
-
 from dotmap import DotMap
 
 
 class ConvBlock(nn.Module):
-    """A convolutional block with two convolutional layers and batch normalization"""
     def __init__(self, in_c, out_c, conf1, conf2):
         super().__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(in_c, out_c, kernel_size=conf1.k, padding=conf1.p, stride=conf1.s),
-            nn.BatchNorm2d(out_c), # TODO: fix batch size >1
+            nn.Conv2d(in_c, out_c, kernel_size=conf1.k,
+                      padding=conf1.p, stride=conf1.s),
+            nn.BatchNorm2d(out_c),
             nn.ReLU(inplace=True),
-            nn.Conv2d(out_c, out_c, kernel_size=conf2.k, padding=conf2.p, stride=conf2.s),
-            nn.BatchNorm2d(out_c), # TODO: fix batch size >
+            nn.Conv2d(out_c, out_c, kernel_size=conf2.k,
+                      padding=conf2.p, stride=conf2.s),
+            nn.BatchNorm2d(out_c),
             nn.ReLU(inplace=True)
         )
 
@@ -39,7 +39,8 @@ class DecoderBlock(nn.Module):
     def __init__(self, in_c, out_c, conf):
         super().__init__()
 
-        self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=conf.up.k, padding=conf.up.p, stride=conf.up.s)
+        self.up = nn.ConvTranspose2d(
+            in_c, out_c, kernel_size=conf.up.k, padding=conf.up.p, stride=conf.up.s)
         self.conv = ConvBlock(out_c + out_c, out_c, conf.conv1, conf.conv2)
 
     def forward(self, inputs, skip):
@@ -68,20 +69,18 @@ class UNet(nn.Module):
         self.d3 = DecoderBlock(256, 128, conf.dec3)
         self.d4 = DecoderBlock(128, 64, conf.dec4)
 
-        self.outputs = nn.Conv2d(64, 1, kernel_size=conf.out.k, padding=conf.out.p, stride=conf.out.s)
-
+        self.outputs = nn.Conv2d(
+            64, 1, kernel_size=conf.out.k, padding=conf.out.p, stride=conf.out.s)
 
     def compute_trf(self, x, y):
         """Compute the theoretical receptive field of a pixel in the output"""
         # TODO
         pass
 
-
     def compute_erf(self, x, y):
         """Compute the effective receptive field of a pixel in the output"""
         # TODO
         pass
-
 
     def forward(self, inputs):
         s1, p1 = self.e1(inputs)
