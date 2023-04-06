@@ -1,0 +1,6 @@
+data/raw/*
+data/preprocessed/*
+!data/raw/.gitkeep
+!data/preprocessed/.gitkeep
+
+__pycache__
