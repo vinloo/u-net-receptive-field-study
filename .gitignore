@@ -1,6 +1,10 @@
 data/raw/*
-data/preprocessed/*
+data/preprocessed/train/*
+data/preprocessed/val/*
+data/preprocessed/test/*
 !data/raw/.gitkeep
-!data/preprocessed/.gitkeep
+!data/preprocessed/train/.gitkeep
+!data/preprocessed/val/.gitkeep
+!data/preprocessed/test/.gitkeep
 
 __pycache__
