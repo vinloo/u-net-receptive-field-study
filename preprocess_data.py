@@ -13,9 +13,15 @@ def clear_data():
     os.mkdir("data/preprocessed/train")
     os.mkdir("data/preprocessed/val")
     os.mkdir("data/preprocessed/test")
+    os.mkdir("data/preprocessed/train/masks")
+    os.mkdir("data/preprocessed/val/masks")
+    os.mkdir("data/preprocessed/test/masks")
     Path("data/preprocessed/train/.gitkeep").touch()
     Path("data/preprocessed/val/.gitkeep").touch()
     Path("data/preprocessed/test/.gitkeep").touch()
+    Path("data/preprocessed/train/masks/.gitkeep").touch()
+    Path("data/preprocessed/val/masks/.gitkeep").touch()
+    Path("data/preprocessed/test/masks/.gitkeep").touch()
 
 
 def process_fetal_head_data(val_rate, test_rate):
@@ -51,7 +57,7 @@ def process_fetal_head_data(val_rate, test_rate):
         cv2.fillPoly(mask, cnts, [255,255,255])
 
         # move images to preprocessed folder
-        cv2.imwrite(f"data/preprocessed/{target}/{img_id}_mask.png", mask)
+        cv2.imwrite(f"data/preprocessed/{target}/masks/{img_id}.png", mask)
         os.system(f"cp {img} data/preprocessed/{target}/{img_id}.png")
 
 
@@ -86,7 +92,7 @@ def process_breast_cancer_data(val_rate, test_rate):
             target = "test"
 
         os.system(f"cp '{img}' data/preprocessed/{target}/{img_id}.png")
-        os.system(f"cp '{ann}' data/preprocessed/{target}/{img_id}_mask.png")
+        os.system(f"cp '{ann}' data/preprocessed/{target}/masks/{img_id}.png")
         
 
 
