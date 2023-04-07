@@ -97,18 +97,11 @@ class Trainer:
             leave=False,
         )
 
-        # https://lars76.github.io/2021/09/05/activations-segmentation.html
-        def _activation(x):
-            return (0.5 - 1e-7) * torch.erf(x/torch.sqrt(torch.tensor(2))) + 0.5
-
         for _, (x, y) in batch_iter:
             input_x = x.to(self.device)
             target_y =  y.to(self.device) / 255
             self.optimizer.zero_grad()
             out = self.model(input_x)
-            # print(out.min(), out.max(), target_y.min(), target_y.max())
-            # out = _activation(out)
-            # print(str(out[0,0,:,:]))
             loss = self.criterion(out, target_y)
             loss_value = loss.item()
             train_losses.append(abs(loss_value))
@@ -154,8 +147,6 @@ class Trainer:
 
 def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.001, seed=42):
     torch.manual_seed(seed)
-
-    # TODO: Make code work for batch size >1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")

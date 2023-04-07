@@ -26,6 +26,25 @@ Training the model can be done by running `python train.py -d <dataset>`. The da
 
 After training, a checkpoint for each epoch will be saved at `checkpoints/{dataset_name}/{config_name}`. The last number of the file name corresponds to the validation loss at that epoch.
 
+### How to train on Snellius' A100 GPU
+- Copy all code files and configurations to Snellius:
+    - `bash snellius/copy_code.sh`
+- Copy all data to Snellius:
+    - `bash snellius/copy_data.sh`
+- SSH into Snellius:
+    - `ssh <username>@snellius.surf.nl`
+    - Load all modules and install dependencies:
+        - `salloc -p gpu -n 1 --ntasks-per-node 1 --gpus 1 --cpus-per-task 18 -t 8:00:00`
+        - `module load 2021`
+        - `module load PyTorch/1.10.0-foss-2021a-CUDA-11.3.1`
+        - `module load torchvision/0.11.1-foss-2021a-CUDA-11.3.1`
+        - `pip install dotmap`
+        - `pip install tqdm`
+        - `pip install opencv_python`
+        - `pip install matplotlib`
+    - Train the model:
+        - `python train.py -d <dataset> -b 8 -e 32`
+
 ## Datasets Used
 [**Fetal Head Ultrasound Images**](https://zenodo.org/record/1327317)<br>
 Thomas L. A. van den Heuvel, Dagmar de Bruijn, Chris L. de Korte, & Bram van Ginneken. (2018). Automated measurement of fetal head circumference using 2D ultrasound images [Data set]. Zenodo. https://doi.org/10.5281/zenodo.1327317
