@@ -6,7 +6,8 @@ import numpy as np
 import json
 import argparse
 import shutil
-from preprocess_data import ALL_DATASETS, preprocess
+from preprocess_data import ALL_DATASETS
+from torchvision.io import read_image
 from dotmap import DotMap
 from PIL import Image
 from unet import UNet
@@ -28,24 +29,11 @@ class SegmentationDataset(Dataset):
     def __len__(self):
         return len(self.inputs)
 
-    def __getitem__(self,
-                    index: int):
+    def __getitem__(self, index: int):
         input_id = self.inputs[index]
         target_id = self.masks[index]
-
-        x, y = Image.open(input_id), Image.open(target_id)
-
-        # convert to grayscale and scale to fixed size
-        x = x.convert('L')
-        y = y.convert('L')
-        x = x.resize((576, 576))
-        y = y.resize((576, 576))
-
-        x = np.array(x)
-        y = np.array(y)
-
-        x, y = torch.from_numpy(x).type(self.inputs_dtype).unsqueeze(
-            0), torch.from_numpy(y).type(self.masks_dtype).unsqueeze(0)
+        x = read_image(input_id).type(self.inputs_dtype)
+        y = read_image(target_id).type(self.masks_dtype)
 
         return x, y
 
@@ -81,6 +69,7 @@ class Trainer:
             os.makedirs(chkp_dir)
         else:
             shutil.rmtree(chkp_dir)
+            os.makedirs(chkp_dir)
 
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
@@ -106,16 +95,21 @@ class Trainer:
             leave=False,
         )
 
+        # https://lars76.github.io/2021/09/05/activations-segmentation.html
+        def _activation(x):
+            return (0.5 - 1e-7) * torch.erf(x/torch.sqrt(torch.tensor(2))) + 0.5
+
         for _, (x, y) in batch_iter:
             input_x, target_y = x.to(self.device), y.to(
                 self.device
             )
             self.optimizer.zero_grad()
             out = self.model(input_x)
+            out = _activation(out)
             # print(str(out[0,0,:,:]))
             loss = self.criterion(out[0, 0, :, :], target_y[0, 0, :, :])
             loss_value = loss.item()
-            train_losses.append(loss_value)
+            train_losses.append(abs(loss_value))
             loss.backward()
             self.optimizer.step()
 
@@ -145,9 +139,10 @@ class Trainer:
 
             with torch.no_grad():
                 out = self.model(input)
+                out = torch.sigmoid(out)
                 loss = self.criterion(out[0, 0, :, :], target[0, 0, :, :])
                 loss_value = loss.item()
-                valid_losses.append(loss_value)
+                valid_losses.append(abs(loss_value))
 
                 batch_iter.set_description(
                     f"Validation: (loss {loss_value:.4f})")
@@ -178,12 +173,12 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
-    inputs_train = glob.glob(os.path.join("data/preprocessed/train", "*.png"))
+    inputs_train = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/train", "*.png"))
     masks_train = glob.glob(os.path.join(
-        "data/preprocessed/train/masks", "*.png"))
-    inputs_val = glob.glob(os.path.join("data/preprocessed/train", "*.png"))
+        f"data/preprocessed/{dataset_name}/train/masks", "*.png"))
+    inputs_val = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/val", "*.png"))
     masks_val = glob.glob(os.path.join(
-        "data/preprocessed/train/masks", "*.png"))
+        f"data/preprocessed/{dataset_name}/val/masks", "*.png"))
 
     dataset_train = SegmentationDataset(inputs_train, masks_train)
     dataset_val = SegmentationDataset(inputs_val, masks_val)
@@ -192,7 +187,8 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 
     model = UNet(config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = BinaryDiceLoss()
+    # criterion = BinaryDiceLoss()
+    criterion = torch.nn.BCEWithLogitsLoss()
 
     trainer = Trainer(
         model=model,
@@ -216,15 +212,12 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 
 
 def main():
-    # argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
-    parser.add_argument("-v", "--val_rate", type=float, default=0.2, help="validation set rate")
-    parser.add_argument("-t", "--test_rate", type=float, default=0.1, help="test set rate")
     parser.add_argument("-s", "--seed", type=int, default=42, help="random seed")
     parser.add_argument("-c", "--config", type=str, default="configurations/default.json", help="path to config file")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
-    parser.add_argument("-b", "--batch_size", type=int, default=1, help="batch size")
+    parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
     parser.add_argument("-l", "--learning_rate", type=float, default=0.001, help="learning rate")
     args = parser.parse_args()
 
@@ -331,10 +324,6 @@ def main():
 
     config_name = args.config.split("/")[-1].split(".")[0]
 
-    print("Loading data...")
-    preprocess(args.dataset, args.val_rate, args.test_rate, args.seed)
-    print("Done\n")
-    print("Training model")
     train(config, args.dataset, config_name, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed)
     
 

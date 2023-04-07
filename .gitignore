@@ -1,13 +1,11 @@
 data/raw/*
-data/preprocessed/train/*
-data/preprocessed/val/*
-data/preprocessed/test/*
 !data/raw/.gitkeep
-!data/preprocessed/train/.gitkeep
-!data/preprocessed/val/.gitkeep
-!data/preprocessed/test/.gitkeep
+data/preprocessed/*
+!data/preprocessed/.gitkeep
 
 checkpoints/*
 !checkpoints/.gitkeep
+
+snellius
 
 __pycache__

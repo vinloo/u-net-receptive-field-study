@@ -4,28 +4,31 @@ import shutil
 import uuid
 import cv2
 import random
-from pathlib import Path
+import argparse
+from PIL import Image
 
 
 ALL_DATASETS = ["fetal_head", "breast_cancer"]
 
 
-def clear_data():
+def reformat(img):
+    # convert to grayscale and scale to fixed size
+    img = img.convert('L')
+    img = img.resize((576, 576))
+    return img
+
+
+def clear_data(dataset):
     """Clear existing data in data/preprocessed folder"""
-    shutil.rmtree("data/preprocessed")
-    os.mkdir("data/preprocessed")
-    os.mkdir("data/preprocessed/train")
-    os.mkdir("data/preprocessed/val")
-    os.mkdir("data/preprocessed/test")
-    os.mkdir("data/preprocessed/train/masks")
-    os.mkdir("data/preprocessed/val/masks")
-    os.mkdir("data/preprocessed/test/masks")
-    Path("data/preprocessed/train/.gitkeep").touch()
-    Path("data/preprocessed/val/.gitkeep").touch()
-    Path("data/preprocessed/test/.gitkeep").touch()
-    Path("data/preprocessed/train/masks/.gitkeep").touch()
-    Path("data/preprocessed/val/masks/.gitkeep").touch()
-    Path("data/preprocessed/test/masks/.gitkeep").touch()
+    if os.path.exists(f"data/preprocessed/{dataset}"):
+        shutil.rmtree(f"data/preprocessed/{dataset}")
+    os.mkdir(f"data/preprocessed/{dataset}")
+    os.mkdir(f"data/preprocessed/{dataset}/train")
+    os.mkdir(f"data/preprocessed/{dataset}/val")
+    os.mkdir(f"data/preprocessed/{dataset}/test")
+    os.mkdir(f"data/preprocessed/{dataset}/train/masks")
+    os.mkdir(f"data/preprocessed/{dataset}/val/masks")
+    os.mkdir(f"data/preprocessed/{dataset}/test/masks")
 
 
 def process_fetal_head_data(val_rate, test_rate):
@@ -36,6 +39,7 @@ def process_fetal_head_data(val_rate, test_rate):
     n_val = int(n_samples * val_rate)
 
     sample_ns = list(range(0, n_samples, 2))
+    random.seed("split seed") # to make sure it is split the same way every time
     random.shuffle(sample_ns)
 
     for i in sample_ns:
@@ -60,9 +64,13 @@ def process_fetal_head_data(val_rate, test_rate):
         cnts = cnts[0] if len(cnts) == 2 else cnts[1]
         cv2.fillPoly(mask, cnts, [255,255,255])
 
-        # move images to preprocessed folder
-        cv2.imwrite(f"data/preprocessed/{target}/masks/{img_id}.png", mask)
-        os.system(f"cp {img} data/preprocessed/{target}/{img_id}.png")
+        ann = Image.fromarray(mask)
+        img = Image.open(img)
+        img = reformat(img)
+        ann = reformat(ann)
+
+        img.save(f"data/preprocessed/fetal_head/{target}/{img_id}.png")
+        ann.save(f"data/preprocessed/fetal_head/{target}/masks/{img_id}.png")
 
 
 def process_breast_cancer_data(val_rate, test_rate):
@@ -78,6 +86,7 @@ def process_breast_cancer_data(val_rate, test_rate):
     n_val = int(n_samples * val_rate)
 
     sample_ns = list(range(0, n_samples, 2))
+    random.seed("split seed") # to make sure it is split the same way every time
     random.shuffle(sample_ns)
     
     for i in sample_ns:
@@ -95,19 +104,36 @@ def process_breast_cancer_data(val_rate, test_rate):
         else:
             target = "test"
 
-        os.system(f"cp '{img}' data/preprocessed/{target}/{img_id}.png")
-        os.system(f"cp '{ann}' data/preprocessed/{target}/masks/{img_id}.png")
+        img = Image.open(img)
+        ann = Image.open(ann)
+        img = reformat(img)
+        ann = reformat(ann)
+
+        img.save(f"data/preprocessed/breast_cancer/{target}/{img_id}.png")
+        ann.save(f"data/preprocessed/breast_cancer/{target}/masks/{img_id}.png")
         
 
 
-def preprocess(dataset, val_rate, test_rate, seed):
-    clear_data()
+def preprocess(dataset, val_rate, test_rate):
+    clear_data(dataset)
 
-    random.seed(seed)
-    
     if dataset == "fetal_head":
         process_fetal_head_data(val_rate, test_rate)
     elif dataset == "breast_cancer":
         process_breast_cancer_data(val_rate, test_rate)
     else:
         raise ValueError("Invalid dataset")
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
+    parser.add_argument("-v", "--val_rate", type=float, default=0.2, help="validation set rate")
+    parser.add_argument("-t", "--test_rate", type=float, default=0.1, help="test set rate")
+    args = parser.parse_args()
+
+    preprocess(args.dataset, args.val_rate, args.test_rate)
+
+
+if __name__ == "__main__":
+    main()

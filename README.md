@@ -4,17 +4,24 @@ The U-Net in this code consists of 4 encoder blocks, a bottleneck, and 4 decoder
 
 > *Note*: I have yet to implement the `compute_trf` and `compute_erf` functions in the `UNet class` to compute the theoretical and effective receptive field, so I can start tuning and researching them.
 
-## Training
-Training the model can be done by running `python train.py -d <dataset>`. The dataset is the only required argument, all other arguments have default values as listed in this table:
+## Preprocessing
+Unzip the [datasets](#datasets-used) in the `preprocessed/raw` folder and run `python preprocess.py` with the following arguments.
+
 | **Argument**                              |          **Flag**         | **Required** | **Type** |       **Default value**       |
 |-------------------------------------------|:-------------------------:|:------------:|:--------:|:-----------------------------:|
 | Dataset (`fetal_head` or `breast_cancer`) | `-d` or `--dataset`       |      yes     |    str   |                          None |
 | Validation set rate                       | `-v` or `--val_rate`      |      no      |   float  |                           0.2 |
 | Test set rate                             | `-t` or `--test_rate`     |      no      |   float  |                           0.1 |
+
+## Training
+Training the model can be done by running `python train.py -d <dataset>`. The dataset is the only required argument, all other arguments have default values as listed in this table:
+| **Argument**                              |          **Flag**         | **Required** | **Type** |       **Default value**       |
+|-------------------------------------------|:-------------------------:|:------------:|:--------:|:-----------------------------:|
+| Dataset (`fetal_head` or `breast_cancer`) | `-d` or `--dataset`       |      yes     |    str   |                          None |
 | Seed                                      | `-s` or `--seed`          |      no      |    int   |                            42 |
 | Model config file                         | `-c` or `--config`        |      no      |    str   | "configurations/default.json" |
 | Epochs                                    | `-e` or `--epochs`        |      no      |    int   |                            10 |
-| Batch size                                | `-b` or `--batch_size`    |      no      |    int   |                             1 |
+| Batch size                                | `-b` or `--batch_size`    |      no      |    int   |                             2 |
 | Learning rate                             | `-l` or `--learning-rate` |      no      |   float  |                         0.001 |
 
 After training, a checkpoint for each epoch will be saved at `checkpoints/{dataset_name}/{config_name}`. The last number of the file name corresponds to the validation loss at that epoch.
