@@ -7,4 +7,7 @@ data/preprocessed/test/*
 !data/preprocessed/val/.gitkeep
 !data/preprocessed/test/.gitkeep
 
+checkpoints/*
+!checkpoints/.gitkeep
+
 __pycache__

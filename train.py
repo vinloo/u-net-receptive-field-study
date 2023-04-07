@@ -3,10 +3,14 @@ import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import json
+import argparse
+import shutil
+from preprocess_data import ALL_DATASETS, preprocess
+from dotmap import DotMap
 from PIL import Image
 from unet import UNet
 from torch.utils.data import DataLoader, Dataset
-from configurations.default import config as default_config
 from typing import Optional
 from tqdm import tqdm, trange
 
@@ -71,12 +75,24 @@ class Trainer:
         self.validation_loss = []
         self.learning_rate = []
 
-    def run_trainer(self):
+    def run_trainer(self, dataset_name, config_name):
+        chkp_dir = f"checkpoints/{dataset_name}/{config_name}"
+        if not os.path.exists(chkp_dir):
+            os.makedirs(chkp_dir)
+        else:
+            shutil.rmtree(chkp_dir)
+
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
             self.epoch += 1
             self._train()
             self._validate()
+            torch.save({
+                'epoch': i,
+                'model_state_dict': self.model.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'loss': self.validation_loss,
+            }, f"{chkp_dir}/checkpoint_{i}_{self.validation_loss[-1]:.2f}.pt")
 
         return self.training_loss, self.validation_loss, self.learning_rate
 
@@ -154,7 +170,8 @@ class BinaryDiceLoss(torch.nn.Module):
         return loss.mean()
 
 
-if __name__ == "__main__":
+def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.001, seed=42):
+    torch.manual_seed(seed)
 
     # TODO: Make code work for batch size >1
 
@@ -168,13 +185,13 @@ if __name__ == "__main__":
     masks_val = glob.glob(os.path.join(
         "data/preprocessed/train/masks", "*.png"))
 
-    dataset_train = SegmentationDataset(inputs_train, masks_val)
+    dataset_train = SegmentationDataset(inputs_train, masks_train)
     dataset_val = SegmentationDataset(inputs_val, masks_val)
-    dataloader_train = DataLoader(dataset_train, batch_size=1, shuffle=True)
-    dataloader_val = DataLoader(dataset_val, batch_size=1, shuffle=True)
+    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
+    dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
-    model = UNet(default_config).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    model = UNet(config).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = BinaryDiceLoss()
 
     trainer = Trainer(
@@ -182,14 +199,144 @@ if __name__ == "__main__":
         device=device,
         criterion=criterion,
         optimizer=optimizer,
-        training_dataloader=dataloader_val,
+        training_dataloader=dataloader_train,
         validation_dataloader=dataloader_val,
-        epochs=10
+        epochs=n_epochs
     )
 
-    trainer.run_trainer()
+    trainer.run_trainer(dataset_name, config_name)
+
+    print("Training finished")
+    print("Lowest validation loss at epoch", trainer.validation_loss.index(min(trainer.validation_loss)))
 
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
     plt.legend()
     plt.show()
+
+
+def main():
+    # argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
+    parser.add_argument("-v", "--val_rate", type=float, default=0.2, help="validation set rate")
+    parser.add_argument("-t", "--test_rate", type=float, default=0.1, help="test set rate")
+    parser.add_argument("-s", "--seed", type=int, default=42, help="random seed")
+    parser.add_argument("-c", "--config", type=str, default="configurations/default.json", help="path to config file")
+    parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
+    parser.add_argument("-b", "--batch_size", type=int, default=1, help="batch size")
+    parser.add_argument("-l", "--learning_rate", type=float, default=0.001, help="learning rate")
+    args = parser.parse_args()
+
+    # validate config
+    try:
+        config = json.load(open(args.config))
+        config = DotMap(config, _dynamic=False)
+    except json.decoder.JSONDecodeError:
+        print("Invalid config file")
+        exit(1)
+
+    try:
+        assert type(config.grayscale) is bool, "config.grayscale is of the wrong type, expected bool"
+
+        assert type(config.enc1.conv1.k) is int, "config.enc1.conv1.k is of the wrong type, expected int"
+        assert type(config.enc1.conv1.s) is int, "config.enc1.conv1.s is of the wrong type, expected int"
+        assert type(config.enc1.conv1.p) is int, "config.enc1.conv1.p is of the wrong type, expected int"
+        assert type(config.enc1.conv2.k) is int, "config.enc1.conv2.k is of the wrong type, expected int"
+        assert type(config.enc1.conv2.s) is int, "config.enc1.conv2.s is of the wrong type, expected int"
+        assert type(config.enc1.conv2.p) is int, "config.enc1.conv2.p is of the wrong type, expected int"
+        assert type(config.enc1.pool_k) is int, "config.enc1.pool_k is of the wrong type, expected int"
+
+        assert type(config.enc2.conv1.k) is int, "config.enc2.conv1.k is of the wrong type, expected int"
+        assert type(config.enc2.conv1.s) is int, "config.enc2.conv1.s is of the wrong type, expected int"
+        assert type(config.enc2.conv1.p) is int, "config.enc2.conv1.p is of the wrong type, expected int"
+        assert type(config.enc2.conv2.k) is int, "config.enc2.conv2.k is of the wrong type, expected int"
+        assert type(config.enc2.conv2.s) is int, "config.enc2.conv2.s is of the wrong type, expected int"
+        assert type(config.enc2.conv2.p) is int, "config.enc2.conv2.p is of the wrong type, expected int"
+        assert type(config.enc2.pool_k) is int, "config.enc2.pool_k is of the wrong type, expected int"
+
+        assert type(config.enc3.conv1.k) is int, "config.enc3.conv1.k is of the wrong type, expected int"
+        assert type(config.enc3.conv1.s) is int, "config.enc3.conv1.s is of the wrong type, expected int"
+        assert type(config.enc3.conv1.p) is int, "config.enc3.conv1.p is of the wrong type, expected int"
+        assert type(config.enc3.conv2.k) is int, "config.enc3.conv2.k is of the wrong type, expected int"
+        assert type(config.enc3.conv2.s) is int, "config.enc3.conv2.s is of the wrong type, expected int"
+        assert type(config.enc3.conv2.p) is int, "config.enc3.conv2.p is of the wrong type, expected int"
+        assert type(config.enc3.pool_k) is int, "config.enc3.pool_k is of the wrong type, expected int"
+
+        assert type(config.enc4.conv1.k) is int, "config.enc4.conv1.k is of the wrong type, expected int"
+        assert type(config.enc4.conv1.s) is int, "config.enc4.conv1.s is of the wrong type, expected int"
+        assert type(config.enc4.conv1.p) is int, "config.enc4.conv1.p is of the wrong type, expected int"
+        assert type(config.enc4.conv2.k) is int, "config.enc4.conv2.k is of the wrong type, expected int"
+        assert type(config.enc4.conv2.s) is int, "config.enc4.conv2.s is of the wrong type, expected int"
+        assert type(config.enc4.conv2.p) is int, "config.enc4.conv2.p is of the wrong type, expected int"
+        assert type(config.enc4.pool_k) is int, "config.enc4.pool_k is of the wrong type, expected int"
+
+        assert type(config.b.conv1.k) is int, "config.b.conv1.k is of the wrong type, expected int"
+        assert type(config.b.conv1.s) is int, "config.b.conv1.s is of the wrong type, expected int"
+        assert type(config.b.conv1.p) is int, "config.b.conv1.p is of the wrong type, expected int"
+        assert type(config.b.conv2.k) is int, "config.b.conv2.k is of the wrong type, expected int"
+        assert type(config.b.conv2.s) is int, "config.b.conv2.s is of the wrong type, expected int"
+        assert type(config.b.conv2.p) is int, "config.b.conv2.p is of the wrong type, expected int"
+
+        assert type(config.dec1.up.k) is int, "config.dec1.up.k is of the wrong type, expected int"
+        assert type(config.dec1.up.s) is int, "config.dec1.up.s is of the wrong type, expected int"
+        assert type(config.dec1.up.p) is int, "config.dec1.up.p is of the wrong type, expected int"
+        assert type(config.dec1.conv1.k) is int, "config.dec1.conv1.k is of the wrong type, expected int"
+        assert type(config.dec1.conv1.s) is int, "config.dec1.conv1.s is of the wrong type, expected int"
+        assert type(config.dec1.conv1.p) is int, "config.dec1.conv1.p is of the wrong type, expected int"
+        assert type(config.dec1.conv2.k) is int, "config.dec1.conv2.k is of the wrong type, expected int"
+        assert type(config.dec1.conv2.s) is int, "config.dec1.conv2.s is of the wrong type, expected int"
+        assert type(config.dec1.conv2.p) is int, "config.dec1.conv2.p is of the wrong type, expected int"
+
+        assert type(config.dec2.up.k) is int, "config.dec2.up.k is of the wrong type, expected int"
+        assert type(config.dec2.up.s) is int, "config.dec2.up.s is of the wrong type, expected int"
+        assert type(config.dec2.up.p) is int, "config.dec2.up.p is of the wrong type, expected int"
+        assert type(config.dec2.conv1.k) is int, "config.dec2.conv1.k is of the wrong type, expected int"
+        assert type(config.dec2.conv1.s) is int, "config.dec2.conv1.s is of the wrong type, expected int"
+        assert type(config.dec2.conv1.p) is int, "config.dec2.conv1.p is of the wrong type, expected int"
+        assert type(config.dec2.conv2.k) is int, "config.dec2.conv2.k is of the wrong type, expected int"
+        assert type(config.dec2.conv2.s) is int, "config.dec2.conv2.s is of the wrong type, expected int"
+        assert type(config.dec2.conv2.p) is int, "config.dec2.conv2.p is of the wrong type, expected int"
+
+        assert type(config.dec3.up.k) is int, "config.dec3.up.k is of the wrong type, expected int"
+        assert type(config.dec3.up.s) is int, "config.dec3.up.s is of the wrong type, expected int"
+        assert type(config.dec3.up.p) is int, "config.dec3.up.p is of the wrong type, expected int"
+        assert type(config.dec3.conv1.k) is int, "config.dec3.conv1.k is of the wrong type, expected int"
+        assert type(config.dec3.conv1.s) is int, "config.dec3.conv1.s is of the wrong type, expected int"
+        assert type(config.dec3.conv1.p) is int, "config.dec3.conv1.p is of the wrong type, expected int"
+        assert type(config.dec3.conv2.k) is int, "config.dec3.conv2.k is of the wrong type, expected int"
+        assert type(config.dec3.conv2.s) is int, "config.dec3.conv2.s is of the wrong type, expected int"
+        assert type(config.dec3.conv2.p) is int, "config.dec3.conv2.p is of the wrong type, expected int"
+
+        assert type(config.dec4.up.k) is int, "config.dec4.up.k is of the wrong type, expected int"
+        assert type(config.dec4.up.s) is int, "config.dec4.up.s is of the wrong type, expected int"
+        assert type(config.dec4.up.p) is int, "config.dec4.up.p is of the wrong type, expected int"
+        assert type(config.dec4.conv1.k) is int, "config.dec4.conv1.k is of the wrong type, expected int"
+        assert type(config.dec4.conv1.s) is int, "config.dec4.conv1.s is of the wrong type, expected int"
+        assert type(config.dec4.conv1.p) is int, "config.dec4.conv1.p is of the wrong type, expected int"
+        assert type(config.dec4.conv2.k) is int, "config.dec4.conv2.k is of the wrong type, expected int"
+        assert type(config.dec4.conv2.s) is int, "config.dec4.conv2.s is of the wrong type, expected int"
+        assert type(config.dec4.conv2.p) is int, "config.dec4.conv2.p is of the wrong type, expected int"
+
+        assert type(config.out.k) is int, "config.out.k is of the wrong type, expected int"
+        assert type(config.out.s) is int, "config.out.s is of the wrong type, expected int"
+        assert type(config.out.p) is int, "config.out.p is of the wrong type, expected int"
+
+    except AttributeError as e:
+        print(f"'{args.config}' is missing attribute '{e.name}'")
+        exit(1)
+    except AssertionError as e:
+        print(e)
+        exit(1)
+
+    config_name = args.config.split("/")[-1].split(".")[0]
+
+    print("Loading data...")
+    preprocess(args.dataset, args.val_rate, args.test_rate, args.seed)
+    print("Done\n")
+    print("Training model")
+    train(config, args.dataset, config_name, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed)
+    
+
+if __name__ == "__main__":
+    main()

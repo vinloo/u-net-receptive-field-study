@@ -6,6 +6,10 @@ import cv2
 import random
 from pathlib import Path
 
+
+ALL_DATASETS = ["fetal_head", "breast_cancer"]
+
+
 def clear_data():
     """Clear existing data in data/preprocessed folder"""
     shutil.rmtree("data/preprocessed")
@@ -96,12 +100,14 @@ def process_breast_cancer_data(val_rate, test_rate):
         
 
 
-def main():
+def preprocess(dataset, val_rate, test_rate, seed):
     clear_data()
-    # uncomment whichever dataset you want to preprocess
-    # process_fetal_head_data(0.2, 0.1)
-    process_breast_cancer_data(0.2, 0.1)
 
-
-if __name__ == '__main__':
-    main()
+    random.seed(seed)
+    
+    if dataset == "fetal_head":
+        process_fetal_head_data(val_rate, test_rate)
+    elif dataset == "breast_cancer":
+        process_breast_cancer_data(val_rate, test_rate)
+    else:
+        raise ValueError("Invalid dataset")

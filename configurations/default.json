@@ -1,7 +1,5 @@
-from dotmap import DotMap
-
-config = DotMap({
-    "grayscale": True,
+{
+    "grayscale": true,
     "enc1": {
         "conv1": {
             "k": 3,
@@ -139,4 +137,4 @@ config = DotMap({
         "p": 0,
         "s": 1
     }
-})
+} 
