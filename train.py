@@ -49,6 +49,7 @@ class Trainer:
         validation_dataloader: Optional[Dataset] = None,
         epochs: int = 100,
         epoch: int = 0,
+        scheduler = None
     ):
         self.model = model
         self.criterion = criterion
@@ -62,6 +63,7 @@ class Trainer:
         self.training_loss = []
         self.validation_loss = []
         self.learning_rate = []
+        self.scheduler = scheduler
 
     def run_trainer(self, dataset_name, config_name):
         chkp_dir = f"checkpoints/{dataset_name}/{config_name}"
@@ -100,14 +102,14 @@ class Trainer:
             return (0.5 - 1e-7) * torch.erf(x/torch.sqrt(torch.tensor(2))) + 0.5
 
         for _, (x, y) in batch_iter:
-            input_x, target_y = x.to(self.device), y.to(
-                self.device
-            )
+            input_x = x.to(self.device)
+            target_y =  y.to(self.device) / 255
             self.optimizer.zero_grad()
             out = self.model(input_x)
-            out = _activation(out)
+            # print(out.min(), out.max(), target_y.min(), target_y.max())
+            # out = _activation(out)
             # print(str(out[0,0,:,:]))
-            loss = self.criterion(out[0, 0, :, :], target_y[0, 0, :, :])
+            loss = self.criterion(out, target_y)
             loss_value = loss.item()
             train_losses.append(abs(loss_value))
             loss.backward()
@@ -119,6 +121,7 @@ class Trainer:
 
         self.training_loss.append(np.mean(train_losses))
         self.learning_rate.append(self.optimizer.param_groups[0]["lr"])
+        self.scheduler.step(np.mean(train_losses))
 
         batch_iter.close()
 
@@ -133,14 +136,12 @@ class Trainer:
         )
 
         for _, (x, y) in batch_iter:
-            input, target = x.to(self.device), y.to(
-                self.device
-            )
+            input = x.to(self.device)
+            target = y.to(self.device) / 255
 
             with torch.no_grad():
                 out = self.model(input)
-                out = torch.sigmoid(out)
-                loss = self.criterion(out[0, 0, :, :], target[0, 0, :, :])
+                loss = self.criterion(out, target)
                 loss_value = loss.item()
                 valid_losses.append(abs(loss_value))
 
@@ -149,20 +150,6 @@ class Trainer:
 
         self.validation_loss.append(np.mean(valid_losses))
         batch_iter.close()
-
-
-class BinaryDiceLoss(torch.nn.Module):
-    def __init__(self, smooth=1):
-        super(BinaryDiceLoss, self).__init__()
-        self.smooth = smooth
-
-    def forward(self, predict, target):
-        predict = predict.contiguous().view(predict.shape[0], -1)
-        target = target.contiguous().view(target.shape[0], -1)
-        num = torch.sum(torch.mul(predict, target), dim=1) + self.smooth
-        den = torch.sum(predict.pow(2) + target.pow(2), dim=1) + self.smooth
-        loss = 1 - num / den
-        return loss.mean()
 
 
 def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.001, seed=42):
@@ -187,8 +174,9 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 
     model = UNet(config).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # criterion = BinaryDiceLoss()
     criterion = torch.nn.BCEWithLogitsLoss()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
+    # criterion = torch.nn.BCELoss(reduction='mean')
 
     trainer = Trainer(
         model=model,
@@ -197,7 +185,8 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         optimizer=optimizer,
         training_dataloader=dataloader_train,
         validation_dataloader=dataloader_val,
-        epochs=n_epochs
+        epochs=n_epochs,
+        scheduler=scheduler
     )
 
     trainer.run_trainer(dataset_name, config_name)
