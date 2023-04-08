@@ -6,6 +6,4 @@ data/preprocessed/*
 checkpoints/*
 !checkpoints/.gitkeep
 
-snellius
-
 __pycache__
