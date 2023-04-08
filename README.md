@@ -19,7 +19,7 @@ Training the model can be done by running `python train.py -d <dataset>`. The da
 |-------------------------------------------|:-------------------------:|:------------:|:--------:|:-----------------------------:|
 | Dataset (`fetal_head` or `breast_cancer`) | `-d` or `--dataset`       |      yes     |    str   |                          None |
 | Seed                                      | `-s` or `--seed`          |      no      |    int   |                            42 |
-| Model config file                         | `-c` or `--config`        |      no      |    str   | "configurations/default.json" |
+| Model config file                         | `-c` or `--config`        |      no      |    str   |                     "default" |
 | Epochs                                    | `-e` or `--epochs`        |      no      |    int   |                            10 |
 | Batch size                                | `-b` or `--batch_size`    |      no      |    int   |                             2 |
 | Learning rate                             | `-l` or `--learning-rate` |      no      |   float  |                         0.001 |

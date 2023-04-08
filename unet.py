@@ -18,6 +18,8 @@ class ConvBlock(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+        self.n_submodules = 6
+
     def forward(self, x):
         return self.conv(x)
 
@@ -25,9 +27,10 @@ class ConvBlock(nn.Module):
 class EncoderBlock(nn.Module):
     def __init__(self, in_c, out_c, conf):
         super().__init__()
-
         self.conv = ConvBlock(in_c, out_c, conf.conv1, conf.conv2)
         self.pool = nn.MaxPool2d((conf.pool_k, conf.pool_k))
+
+        self.n_submodules = self.conv.n_submodules + 1
 
     def forward(self, x):
         s = self.conv(x)
@@ -43,12 +46,24 @@ class DecoderBlock(nn.Module):
             in_c, out_c, kernel_size=conf.up.k, padding=conf.up.p, stride=conf.up.s)
         self.conv = ConvBlock(out_c + out_c, out_c, conf.conv1, conf.conv2)
 
+        self.n_submodules = self.conv.n_submodules + 1
+
     def forward(self, inputs, skip):
         x = self.up(inputs)
         x = torch.cat([x, skip], axis=1)
         x = self.conv(x)
 
         return x
+
+class BottleNeck(nn.Module):
+    def __init__(self, in_c, out_c, conf1, conf2):
+        super().__init__()
+        self.conv = ConvBlock(in_c, out_c, conf1, conf2)
+        self.n_submodules = self.conv.n_submodules
+
+    def forward(self, x):
+        return self.conv(x)
+
 
 
 class UNet(nn.Module):
@@ -62,7 +77,7 @@ class UNet(nn.Module):
         self.e3 = EncoderBlock(128, 256, conf.enc3)
         self.e4 = EncoderBlock(256, 512, conf.enc4)
 
-        self.b = ConvBlock(512, 1024, conf.b.conv1, conf.b.conv2)
+        self.b = BottleNeck(512, 1024, conf.b.conv1, conf.b.conv2)
 
         self.d1 = DecoderBlock(1024, 512, conf.dec1)
         self.d2 = DecoderBlock(512, 256, conf.dec2)

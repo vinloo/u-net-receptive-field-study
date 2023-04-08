@@ -6,6 +6,7 @@ import numpy as np
 import json
 import argparse
 import shutil
+from utils.config import load_config
 from preprocess_data import ALL_DATASETS
 from torchvision.io import read_image
 from dotmap import DotMap
@@ -195,116 +196,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
     parser.add_argument("-s", "--seed", type=int, default=42, help="random seed")
-    parser.add_argument("-c", "--config", type=str, default="configurations/default.json", help="path to config file")
+    parser.add_argument("-c", "--config", type=str, default="default", help="path to config file")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
     parser.add_argument("-l", "--learning_rate", type=float, default=0.001, help="learning rate")
     args = parser.parse_args()
 
-    # validate config
-    try:
-        config = json.load(open(args.config))
-        config = DotMap(config, _dynamic=False)
-    except json.decoder.JSONDecodeError:
-        print("Invalid config file")
-        exit(1)
-
-    try:
-        assert type(config.grayscale) is bool, "config.grayscale is of the wrong type, expected bool"
-
-        assert type(config.enc1.conv1.k) is int, "config.enc1.conv1.k is of the wrong type, expected int"
-        assert type(config.enc1.conv1.s) is int, "config.enc1.conv1.s is of the wrong type, expected int"
-        assert type(config.enc1.conv1.p) is int, "config.enc1.conv1.p is of the wrong type, expected int"
-        assert type(config.enc1.conv2.k) is int, "config.enc1.conv2.k is of the wrong type, expected int"
-        assert type(config.enc1.conv2.s) is int, "config.enc1.conv2.s is of the wrong type, expected int"
-        assert type(config.enc1.conv2.p) is int, "config.enc1.conv2.p is of the wrong type, expected int"
-        assert type(config.enc1.pool_k) is int, "config.enc1.pool_k is of the wrong type, expected int"
-
-        assert type(config.enc2.conv1.k) is int, "config.enc2.conv1.k is of the wrong type, expected int"
-        assert type(config.enc2.conv1.s) is int, "config.enc2.conv1.s is of the wrong type, expected int"
-        assert type(config.enc2.conv1.p) is int, "config.enc2.conv1.p is of the wrong type, expected int"
-        assert type(config.enc2.conv2.k) is int, "config.enc2.conv2.k is of the wrong type, expected int"
-        assert type(config.enc2.conv2.s) is int, "config.enc2.conv2.s is of the wrong type, expected int"
-        assert type(config.enc2.conv2.p) is int, "config.enc2.conv2.p is of the wrong type, expected int"
-        assert type(config.enc2.pool_k) is int, "config.enc2.pool_k is of the wrong type, expected int"
-
-        assert type(config.enc3.conv1.k) is int, "config.enc3.conv1.k is of the wrong type, expected int"
-        assert type(config.enc3.conv1.s) is int, "config.enc3.conv1.s is of the wrong type, expected int"
-        assert type(config.enc3.conv1.p) is int, "config.enc3.conv1.p is of the wrong type, expected int"
-        assert type(config.enc3.conv2.k) is int, "config.enc3.conv2.k is of the wrong type, expected int"
-        assert type(config.enc3.conv2.s) is int, "config.enc3.conv2.s is of the wrong type, expected int"
-        assert type(config.enc3.conv2.p) is int, "config.enc3.conv2.p is of the wrong type, expected int"
-        assert type(config.enc3.pool_k) is int, "config.enc3.pool_k is of the wrong type, expected int"
-
-        assert type(config.enc4.conv1.k) is int, "config.enc4.conv1.k is of the wrong type, expected int"
-        assert type(config.enc4.conv1.s) is int, "config.enc4.conv1.s is of the wrong type, expected int"
-        assert type(config.enc4.conv1.p) is int, "config.enc4.conv1.p is of the wrong type, expected int"
-        assert type(config.enc4.conv2.k) is int, "config.enc4.conv2.k is of the wrong type, expected int"
-        assert type(config.enc4.conv2.s) is int, "config.enc4.conv2.s is of the wrong type, expected int"
-        assert type(config.enc4.conv2.p) is int, "config.enc4.conv2.p is of the wrong type, expected int"
-        assert type(config.enc4.pool_k) is int, "config.enc4.pool_k is of the wrong type, expected int"
-
-        assert type(config.b.conv1.k) is int, "config.b.conv1.k is of the wrong type, expected int"
-        assert type(config.b.conv1.s) is int, "config.b.conv1.s is of the wrong type, expected int"
-        assert type(config.b.conv1.p) is int, "config.b.conv1.p is of the wrong type, expected int"
-        assert type(config.b.conv2.k) is int, "config.b.conv2.k is of the wrong type, expected int"
-        assert type(config.b.conv2.s) is int, "config.b.conv2.s is of the wrong type, expected int"
-        assert type(config.b.conv2.p) is int, "config.b.conv2.p is of the wrong type, expected int"
-
-        assert type(config.dec1.up.k) is int, "config.dec1.up.k is of the wrong type, expected int"
-        assert type(config.dec1.up.s) is int, "config.dec1.up.s is of the wrong type, expected int"
-        assert type(config.dec1.up.p) is int, "config.dec1.up.p is of the wrong type, expected int"
-        assert type(config.dec1.conv1.k) is int, "config.dec1.conv1.k is of the wrong type, expected int"
-        assert type(config.dec1.conv1.s) is int, "config.dec1.conv1.s is of the wrong type, expected int"
-        assert type(config.dec1.conv1.p) is int, "config.dec1.conv1.p is of the wrong type, expected int"
-        assert type(config.dec1.conv2.k) is int, "config.dec1.conv2.k is of the wrong type, expected int"
-        assert type(config.dec1.conv2.s) is int, "config.dec1.conv2.s is of the wrong type, expected int"
-        assert type(config.dec1.conv2.p) is int, "config.dec1.conv2.p is of the wrong type, expected int"
-
-        assert type(config.dec2.up.k) is int, "config.dec2.up.k is of the wrong type, expected int"
-        assert type(config.dec2.up.s) is int, "config.dec2.up.s is of the wrong type, expected int"
-        assert type(config.dec2.up.p) is int, "config.dec2.up.p is of the wrong type, expected int"
-        assert type(config.dec2.conv1.k) is int, "config.dec2.conv1.k is of the wrong type, expected int"
-        assert type(config.dec2.conv1.s) is int, "config.dec2.conv1.s is of the wrong type, expected int"
-        assert type(config.dec2.conv1.p) is int, "config.dec2.conv1.p is of the wrong type, expected int"
-        assert type(config.dec2.conv2.k) is int, "config.dec2.conv2.k is of the wrong type, expected int"
-        assert type(config.dec2.conv2.s) is int, "config.dec2.conv2.s is of the wrong type, expected int"
-        assert type(config.dec2.conv2.p) is int, "config.dec2.conv2.p is of the wrong type, expected int"
-
-        assert type(config.dec3.up.k) is int, "config.dec3.up.k is of the wrong type, expected int"
-        assert type(config.dec3.up.s) is int, "config.dec3.up.s is of the wrong type, expected int"
-        assert type(config.dec3.up.p) is int, "config.dec3.up.p is of the wrong type, expected int"
-        assert type(config.dec3.conv1.k) is int, "config.dec3.conv1.k is of the wrong type, expected int"
-        assert type(config.dec3.conv1.s) is int, "config.dec3.conv1.s is of the wrong type, expected int"
-        assert type(config.dec3.conv1.p) is int, "config.dec3.conv1.p is of the wrong type, expected int"
-        assert type(config.dec3.conv2.k) is int, "config.dec3.conv2.k is of the wrong type, expected int"
-        assert type(config.dec3.conv2.s) is int, "config.dec3.conv2.s is of the wrong type, expected int"
-        assert type(config.dec3.conv2.p) is int, "config.dec3.conv2.p is of the wrong type, expected int"
-
-        assert type(config.dec4.up.k) is int, "config.dec4.up.k is of the wrong type, expected int"
-        assert type(config.dec4.up.s) is int, "config.dec4.up.s is of the wrong type, expected int"
-        assert type(config.dec4.up.p) is int, "config.dec4.up.p is of the wrong type, expected int"
-        assert type(config.dec4.conv1.k) is int, "config.dec4.conv1.k is of the wrong type, expected int"
-        assert type(config.dec4.conv1.s) is int, "config.dec4.conv1.s is of the wrong type, expected int"
-        assert type(config.dec4.conv1.p) is int, "config.dec4.conv1.p is of the wrong type, expected int"
-        assert type(config.dec4.conv2.k) is int, "config.dec4.conv2.k is of the wrong type, expected int"
-        assert type(config.dec4.conv2.s) is int, "config.dec4.conv2.s is of the wrong type, expected int"
-        assert type(config.dec4.conv2.p) is int, "config.dec4.conv2.p is of the wrong type, expected int"
-
-        assert type(config.out.k) is int, "config.out.k is of the wrong type, expected int"
-        assert type(config.out.s) is int, "config.out.s is of the wrong type, expected int"
-        assert type(config.out.p) is int, "config.out.p is of the wrong type, expected int"
-
-    except AttributeError as e:
-        print(f"'{args.config}' is missing attribute '{e.name}'")
-        exit(1)
-    except AssertionError as e:
-        print(e)
-        exit(1)
-
-    config_name = args.config.split("/")[-1].split(".")[0]
-
-    train(config, args.dataset, config_name, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed)
+    config = load_config(args.config)
+   
+    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed)
     
 
 if __name__ == "__main__":
