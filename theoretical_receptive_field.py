@@ -1,184 +1,194 @@
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from unet import ConvBlock, EncoderBlock, DecoderBlock, BottleNeck
+from unet import ConvBlock, EncoderBlock, DecoderBlock, BottleNeck, UNet
 from collections import OrderedDict
 import numpy as np
+import gc
+
+def simulate_convolution_trf(prev_trf, k, s, p):
+    
+    # get dimensions of the input image and the kernel
+    m, n = len(prev_trf), len(prev_trf)
+    prev_trf_padded = np.pad(prev_trf, ((p,p), (p,p), (0,0), (0,0)), 'edge')
+
+    # compute output dimensions
+    out_m = (m - k + 2*p) // s + 1
+    out_n = (n - k + 2*p) // s + 1
+    trf = np.empty((out_m, out_n, 2, 2), dtype=int)
+
+    max_trf_size = 0
+
+    # simulate convolution but join the receptive fields
+    for i in range(out_m):
+        for j in range(out_n):
+            top_left = prev_trf_padded[i*s, j*s]
+            bottom_right = prev_trf_padded[i*s+k-1, j*s+k-1]
+
+            trf_size = bottom_right[1, 0] - top_left[0, 0] + 1
+            max_trf_size = max(max_trf_size, trf_size)
+            trf[i, j, 0] = top_left[0]
+            trf[i, j, 1] = bottom_right[1]
+
+    return trf, max_trf_size
 
 
-def compute_trf(model, input_size, batch_size=-1, device="cuda"):
 
-    def register_hook(module):
-
-        def hook(module, input, output):
-            class_name = module.__class__.__name__
-            module_idx = len(receptive_field)
-            m_key = "%i" % module_idx
-            prev_key = "%i" % (module_idx - 1)
-            receptive_field[m_key] = OrderedDict()
-            receptive_field[m_key]["type"] = class_name
-            receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"]
-
-            if not receptive_field["0"]["encoding"]:
-                if class_name == "ConvTranspose2d":
-                    receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"] - 1
-
-                # from prev upconv 
-                prev_j = receptive_field[prev_key]["j"]
-                prev_r = receptive_field[prev_key]["r"]
-                prev_start = receptive_field[prev_key]["start"]
-
-                # from skip
-                skip_key = str(receptive_field[m_key]["skip"])
-                skip_j = receptive_field[skip_key]["j"]
-                skip_r = receptive_field[skip_key]["r"]
-                skip_start = receptive_field[skip_key]["start"]
-
-                # TODO: COMPUTATION FOR RF OF UPCONVOLUTION
-                receptive_field[m_key]["j"] = 0
-                receptive_field[m_key]["r"] = 0
-                receptive_field[m_key]["start"] = 0
-            else:
-                # COMPUTATION FOR RF OF CONVOLUTION
-                prev_j = receptive_field[prev_key]["j"]
-                prev_r = receptive_field[prev_key]["r"]
-                prev_start = receptive_field[prev_key]["start"]
-
-                if class_name == "MaxPool2d":
-                    receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"] + 1
-
-                if class_name == "Conv2d" or class_name == "MaxPool2d":
-                    kernel_size = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
-                    stride = module.stride if isinstance(module.stride, int) else module.stride[0]
-                    padding = module.padding if isinstance(module.padding, int) else module.padding[0]
-                    dilation = module.dilation if isinstance(module.dilation, int) else module.dilation[0]
-
-                    # Source of equations:
-                    # https://blog.mlreview.com/a-guide-to-receptive-field-arithmetic-for-convolutional-neural-networks-e0f514068807
-                    receptive_field[m_key]["j"] = prev_j * stride
-                    receptive_field[m_key]["r"] = prev_r + ((kernel_size - 1) * dilation) * prev_j
-                    receptive_field[m_key]["start"] = prev_start + ((kernel_size - 1) / 2 - padding) * prev_j
-                elif class_name == "BatchNorm2d" or class_name == "ReLU":
-                    receptive_field[m_key]["j"] = prev_j
-                    receptive_field[m_key]["r"] = prev_r
-                    receptive_field[m_key]["start"] = prev_start
-                elif class_name == "ConvTranspose2d":
-                    # only for the ConvTranspose2d in the FIRST decoder block
-                    receptive_field["0"]["encoding"] = False
-                    
-                    # from skip
-                    skip_key = str(receptive_field[m_key]["skip"])
-                    skip_j = receptive_field[skip_key]["j"]
-                    skip_r = receptive_field[skip_key]["r"]
-                    skip_start = receptive_field[skip_key]["start"]
-
-                    # TODO: COMPUTATION FOR RF OF FIRST UPCONVOLUTION
-                    receptive_field[m_key]["j"] = 0
-                    receptive_field[m_key]["r"] = 0
-                    receptive_field[m_key]["start"] = 0
-                else:
-                    raise ValueError("module {} not ok".format(class_name))
-
-
-            receptive_field[m_key]["input_shape"] = list(input[0].size())
-            receptive_field[m_key]["input_shape"][0] = batch_size
-            if isinstance(output, (list, tuple)):
-                receptive_field[m_key]["output_shape"] = [
-                    [-1] + list(o.size())[1:] for o in output
-                ]
-            else:
-                receptive_field[m_key]["output_shape"] = list(output.size())
-                receptive_field[m_key]["output_shape"][0] = batch_size
-
-        if (
-            type(module) not in [nn.Sequential, nn.ModuleList, nn.Module, nn.Linear, ConvBlock, EncoderBlock, DecoderBlock, BottleNeck]
-            and not (module == model)
-        ):
-            hooks.append(module.register_forward_hook(hook))
-        elif type(module) in [EncoderBlock, DecoderBlock, BottleNeck]:
-            loc = str(len(hooks) - module.n_submodules + 1)
-            blocks[str(loc)] = module.__class__.__name__
-
-    dtype = torch.cuda.FloatTensor if device == "cuda" else torch.FloatTensor
-    x = Variable(torch.rand(2, *input_size)).type(dtype)
-
+def compute_trf(model, input_dim):
+    n_modules = 0
     receptive_field = OrderedDict()
     receptive_field["0"] = OrderedDict()
-    receptive_field["0"]["skip"] = 0
-    receptive_field["0"]["encoding"] = True
+    receptive_field["0"]["skip"] = 1
     receptive_field["0"]["type"] = "input layer"
-    receptive_field["0"]["j"] = 1.0
-    receptive_field["0"]["r"] = 1.0
-    receptive_field["0"]["start"] = 0.5
-    receptive_field["0"]["output_shape"] = list(x.size())
-    receptive_field["0"]["output_shape"][0] = batch_size
-    hooks = []
+    receptive_field["0"]["trf"] = np.array([[[[j,i], [j,i]] for i in range(input_dim)]  for j in range(input_dim)], dtype=int)
+    receptive_field["0"]["max_trf_size"] = 1
+
+    skip_indices = []
+    skip_trfs = dict()
+
     blocks = dict()
 
-    model.apply(register_hook)
-    model(x)
+    encoding = True
 
-    for h in hooks:
-        h.remove()
+    for module in model.modules():
 
-    print("------------------------------------------------------------------------------")
-    line_new = "{:>5}  {:15}  {:>12}  {:>10} {:>10} {:>10} {:>7}".format("layer", "type", "map size", "start", "jump", "TRF", "skip")
+        if type(module) not in [nn.Sequential, nn.ModuleList, nn.Module, nn.Linear, ConvBlock, EncoderBlock, DecoderBlock, BottleNeck, UNet]:
+            n_modules += 1
+        elif type(module) in [EncoderBlock, DecoderBlock, BottleNeck]:
+            loc = n_modules + 1
+            blocks[str(loc)] = module.__class__.__name__
+            continue
+        else:
+            continue
+
+        class_name = module.__class__.__name__
+        module_idx = len(receptive_field)
+        m_key = str(module_idx)
+        prev_key = str(module_idx - 1)
+        prev_trf = receptive_field[prev_key]["trf"]
+        prev_max_rf = receptive_field[prev_key]["max_trf_size"]
+
+        receptive_field[m_key] = OrderedDict()
+        receptive_field[m_key]["type"] = class_name
+        receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"]
+
+        # COMPUTE RECEPTIVE FIELD OF CONVOLUTION WITH SKIP CONNECTION & UPSAMLE IN DECDOER BLOCK 
+        if not encoding:
+            print(len(blocks))
+            assert class_name == "Conv2d"
+            receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"] - 1
+            encoding = True
+            
+            k = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
+            s = module.stride if isinstance(module.stride, int) else module.stride[0]
+            p = module.padding if isinstance(module.padding, int) else module.padding[0]
+            p = (k - 1) // 2 if p == "s" else p
+
+            # from skip
+            skip_key = str(receptive_field[m_key]["skip"])
+            skip_trf = skip_trfs[skip_key]
+
+            # compute receptive field from upconv and skip concatenation
+            concat_trf = np.zeros_like(prev_trf)
+            for i in range(len(prev_trf)):
+                for j in range(len(prev_trf[0])):
+                    if prev_trf[i,j,0,0] <= skip_trf[i,j,0,0]:
+                        concat_trf[i,j,0] = prev_trf[i,j,0]
+                    else:
+                        concat_trf[i,j,0] = skip_trf[i,j,0]
+                    if prev_trf[i,j,1,1] >= skip_trf[i,j,1,1]:
+                        concat_trf[i,j,1] = prev_trf[i,j,1]
+                    else:
+                        concat_trf[i,j,1] = skip_trf[i,j,1]
+            
+            # compute the trf of the convolution after the concatenation
+            trf, max_trf_size = simulate_convolution_trf(prev_trf, k, s, p)
+            receptive_field[m_key]["trf"] = trf
+            receptive_field[m_key]["max_trf_size"] = max_trf_size
+
+        else:
+            prev_trf = receptive_field[prev_key]["trf"]
+
+            # compute receptive field after maxpool
+            if class_name == "MaxPool2d":
+                receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"] + 1
+                skip_trfs[str(receptive_field[prev_key]["skip"])] = receptive_field[prev_key]["trf"] # set to trf of previous ReLU
+                skip_indices.append(prev_key)
+
+                k = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
+                out_shape = prev_trf.shape[0] // k
+                trf = np.zeros((out_shape, out_shape, 2, 2), dtype=int)
+                max_trf_size = 0
+
+                for i in range(out_shape):
+                    for j in range(out_shape):
+                        top_left = prev_trf[i*k, j*k]
+                        bottom_right = prev_trf[i*k+k-1, j*k+k-1]
+                        trf[i, j, 0] = top_left[0]
+                        trf[i, j, 1] = bottom_right[1]
+                        trf_size = bottom_right[1, 0] - top_left[0, 0] + 1
+                        max_trf_size = max(max_trf_size, trf_size)
+
+                receptive_field[m_key]["trf"] = trf
+                receptive_field[m_key]["max_trf_size"] = max_trf_size
+
+            # compute receptive field after convolution
+            elif class_name == "Conv2d":
+                k = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
+                s = module.stride if isinstance(module.stride, int) else module.stride[0]
+                p = module.padding if isinstance(module.padding, int) else module.padding[0]
+                p = (k - 1) // 2 if p == "s" else p
+                trf, max_trf_size = simulate_convolution_trf(prev_trf, k, s, p)
+                receptive_field[m_key]["trf"] = trf
+                receptive_field[m_key]["max_trf_size"] = max_trf_size
+
+            # compute receptive field after deconvolution
+            elif class_name == "ConvTranspose2d":
+                encoding = False
+                
+                # compute receptive field of deconvolution
+                kernel_size = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
+                stride = module.stride if isinstance(module.stride, int) else module.stride[0]
+                padding = module.padding if isinstance(module.padding, int) else module.padding[0]
+                # output_padding = module.output_padding if isinstance(module.output_padding, int) else module.output_padding[0]
+
+                
+                # TODO
+                receptive_field[m_key]["trf"] = prev_trf
+                receptive_field[m_key]["max_trf_size"] = prev_max_rf
+
+            # no changes in receptive field for batchnorm and relu
+            elif class_name == "BatchNorm2d" or class_name == "ReLU":
+                receptive_field[m_key]["trf"] = prev_trf
+                receptive_field[m_key]["max_trf_size"] = prev_max_rf
+            else:
+                continue
+
+    # print the receptive field for each layer
+    line_new = "{:>5}  {:15}  {:>12} {:>10}".format("layer", "type", "max_trf_size", "skip conn.")
+    print("-" * len(line_new))
     print(line_new)
-    print("==============================================================================")
+    print("=" * len(line_new))
     
     for layer in receptive_field:
-        # input_shape, output_shape, trainable, nb_params
-        assert "start" in receptive_field[layer], layer
-        assert len(receptive_field[layer]["output_shape"]) == 4 or len(receptive_field[layer]["output_shape"]) == 5
-
         skip_str = ""
-        if receptive_field[layer]["type"] == "ConvTranspose2d":
+        if int(layer) >= 1 and receptive_field[str(int(layer) - 1)]["type"] == "ConvTranspose2d":
             skip_str = str(receptive_field[layer]["skip"]) + " IN"
-        elif receptive_field[layer]["type"] == "MaxPool2d":
+        elif receptive_field[layer]["type"] == "ReLU" and layer in skip_indices:
             skip_str = str(receptive_field[layer]["skip"]) + " OUT"
 
-        line_new = "{:>5}  {:15}  {:>12}  {:>10} {:>10} {:>10} {:>7}".format(
+        line_new = "{:>5}  {:15}  {:>12} {:>10}".format(
             layer,
             receptive_field[layer]["type"],
-            str(receptive_field[layer]["output_shape"][2:]),
-            str(receptive_field[layer]["start"]),
-            str(receptive_field[layer]["j"]),
-            format(str(receptive_field[layer]["r"])),
+            str(receptive_field[layer]["max_trf_size"]),
             skip_str
         )
 
         if layer in blocks:
             line_new = "\n" + blocks[layer] + "\n" + line_new
 
-        # line_new += " " + str(receptive_field[layer]["skip"])
-           
         print(line_new)
 
-    print("==============================================================================")
+    print("-" * len(line_new))
     
-    receptive_field["input_size"] = input_size
     return receptive_field
-
-
-def get_pixel_trf(receptive_field_dict, layer: int, pixel_position):
-    layer = str(layer)
-    input_shape = receptive_field_dict["input_size"]
-    if layer in receptive_field_dict:
-        rf_stats = receptive_field_dict[layer]
-        feat_map_lim = rf_stats['output_shape'][2:]
-
-        if np.any([pixel_position[idx] < 0 or pixel_position[idx] >= feat_map_lim[idx] for idx in range(len(pixel_position))]):
-            raise Exception("Unit position outside spatial extent of the feature tensor ((H, W) = (%d, %d)) " % tuple(feat_map_lim))
-                
-        rf_range = [(rf_stats['start'] + idx * rf_stats['j'] - rf_stats['r'] / 2,
-            rf_stats['start'] + idx * rf_stats['j'] + rf_stats['r'] / 2) for idx in pixel_position]
-        if len(input_shape) == 2:
-            limit = input_shape
-        else:
-            limit = input_shape[1:3]
-        rf_range = [(max(0, rf_range[axis][0]), min(limit[axis], rf_range[axis][1])) for axis in range(2)]
-
-        print("Receptive field size for layer %s, pixel_position %s,  is \n %s" % (layer, pixel_position, rf_range))
-        return rf_range
-
-    raise KeyError("Layer does not exist")

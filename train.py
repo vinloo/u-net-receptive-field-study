@@ -79,12 +79,15 @@ class Trainer:
             self.epoch += 1
             self._train()
             self._validate()
-            torch.save({
-                'epoch': i,
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optimizer.state_dict(),
-                'loss': self.validation_loss,
-            }, f"{chkp_dir}/checkpoint_{i}_{self.validation_loss[-1]:.2f}.pt")
+
+            # only save if it performs better
+            if self.validation_loss[-1] <= min(self.validation_loss):
+                torch.save({
+                    'epoch': i,
+                    'model_state_dict': self.model.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                    'loss': self.validation_loss,
+                }, f"{chkp_dir}/checkpoint_{i}_{self.validation_loss[-1]:.2f}.pt")
 
         return self.training_loss, self.validation_loss, self.learning_rate
 
@@ -146,7 +149,7 @@ class Trainer:
         batch_iter.close()
 
 
-def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.001, seed=42):
+def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.0001, seed=42):
     torch.manual_seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -189,7 +192,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
     plt.legend()
-    plt.show()
+    plt.savefig(f'result_{dataset_name}_{min(trainer.validation_loss)}.png')
 
 
 def main():
@@ -199,7 +202,7 @@ def main():
     parser.add_argument("-c", "--config", type=str, default="default", help="path to config file")
     parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
-    parser.add_argument("-l", "--learning_rate", type=float, default=0.001, help="learning rate")
+    parser.add_argument("-l", "--learning_rate", type=float, default=0.0001, help="learning rate")
     args = parser.parse_args()
 
     config = load_config(args.config)

@@ -6,4 +6,6 @@ data/preprocessed/*
 checkpoints/*
 !checkpoints/.gitkeep
 
+out
+
 __pycache__
