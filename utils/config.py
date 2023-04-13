@@ -54,7 +54,7 @@ def load_config(config_name):
 
         assert type(config.dec1.up.k) is int, "config.dec1.up.k is of the wrong type, expected int"
         assert type(config.dec1.up.s) is int, "config.dec1.up.s is of the wrong type, expected int"
-        assert type(config.dec1.up.p) is int, "config.dec1.up.p is of the wrong type, expected int"
+        # assert type(config.dec1.up.p) is int, "config.dec1.up.p is of the wrong type, expected int"
         assert type(config.dec1.conv1.k) is int, "config.dec1.conv1.k is of the wrong type, expected int"
         assert type(config.dec1.conv1.s) is int, "config.dec1.conv1.s is of the wrong type, expected int"
         assert type(config.dec1.conv1.p) is int or config.dec1.conv1.p == "same", "config.dec1.conv1.p is of the wrong type, expected int or value \"same\""
@@ -64,7 +64,7 @@ def load_config(config_name):
 
         assert type(config.dec2.up.k) is int, "config.dec2.up.k is of the wrong type, expected int"
         assert type(config.dec2.up.s) is int, "config.dec2.up.s is of the wrong type, expected int"
-        assert type(config.dec2.up.p) is int, "config.dec2.up.p is of the wrong type, expected int"
+        # assert type(config.dec2.up.p) is int, "config.dec2.up.p is of the wrong type, expected int"
         assert type(config.dec2.conv1.k) is int, "config.dec2.conv1.k is of the wrong type, expected int"
         assert type(config.dec2.conv1.s) is int, "config.dec2.conv1.s is of the wrong type, expected int"
         assert type(config.dec2.conv1.p) is int or config.dec2.conv1.p == "same", "config.dec2.conv1.p is of the wrong type, expected int or value \"same\""
@@ -74,7 +74,7 @@ def load_config(config_name):
 
         assert type(config.dec3.up.k) is int, "config.dec3.up.k is of the wrong type, expected int"
         assert type(config.dec3.up.s) is int, "config.dec3.up.s is of the wrong type, expected int"
-        assert type(config.dec3.up.p) is int, "config.dec3.up.p is of the wrong type, expected int"
+        # assert type(config.dec3.up.p) is int, "config.dec3.up.p is of the wrong type, expected int"
         assert type(config.dec3.conv1.k) is int, "config.dec3.conv1.k is of the wrong type, expected int"
         assert type(config.dec3.conv1.s) is int, "config.dec3.conv1.s is of the wrong type, expected int"
         assert type(config.dec3.conv1.p) is int or config.dec3.conv1.p == "same", "config.dec3.conv1.p is of the wrong type, expected int or value \"same\""
@@ -84,7 +84,7 @@ def load_config(config_name):
 
         assert type(config.dec4.up.k) is int, "config.dec4.up.k is of the wrong type, expected int"
         assert type(config.dec4.up.s) is int, "config.dec4.up.s is of the wrong type, expected int"
-        assert type(config.dec4.up.p) is int, "config.dec4.up.p is of the wrong type, expected int"
+        # assert type(config.dec4.up.p) is int, "config.dec4.up.p is of the wrong type, expected int"
         assert type(config.dec4.conv1.k) is int, "config.dec4.conv1.k is of the wrong type, expected int"
         assert type(config.dec4.conv1.s) is int, "config.dec4.conv1.s is of the wrong type, expected int"
         assert type(config.dec4.conv1.p) is int or config.dec4.conv1.p == "same", "config.dec4.conv1.p is of the wrong type, expected int or value \"same\""

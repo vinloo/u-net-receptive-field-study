@@ -1,10 +1,7 @@
-import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from unet import ConvBlock, EncoderBlock, DecoderBlock, BottleNeck, UNet
 from collections import OrderedDict
 import numpy as np
-import gc
 
 def simulate_convolution_trf(prev_trf, k, s, p):
     
@@ -74,7 +71,6 @@ def compute_trf(model, input_dim):
 
         # COMPUTE RECEPTIVE FIELD OF CONVOLUTION WITH SKIP CONNECTION & UPSAMLE IN DECDOER BLOCK 
         if not encoding:
-            print(len(blocks))
             assert class_name == "Conv2d"
             receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"] - 1
             encoding = True
@@ -92,11 +88,11 @@ def compute_trf(model, input_dim):
             concat_trf = np.zeros_like(prev_trf)
             for i in range(len(prev_trf)):
                 for j in range(len(prev_trf[0])):
-                    if prev_trf[i,j,0,0] <= skip_trf[i,j,0,0]:
+                    if prev_trf[i,j,0,0] <= skip_trf[i,j,0,0] and prev_trf[i,j,1,1] >= skip_trf[i,j,1,1]:
                         concat_trf[i,j,0] = prev_trf[i,j,0]
                     else:
                         concat_trf[i,j,0] = skip_trf[i,j,0]
-                    if prev_trf[i,j,1,1] >= skip_trf[i,j,1,1]:
+                    if prev_trf[i,j,1,1] >= skip_trf[i,j,1,1] and prev_trf[i,j,0,0] <= skip_trf[i,j,0,0]:
                         concat_trf[i,j,1] = prev_trf[i,j,1]
                     else:
                         concat_trf[i,j,1] = skip_trf[i,j,1]
@@ -147,15 +143,39 @@ def compute_trf(model, input_dim):
                 encoding = False
                 
                 # compute receptive field of deconvolution
-                kernel_size = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
-                stride = module.stride if isinstance(module.stride, int) else module.stride[0]
-                padding = module.padding if isinstance(module.padding, int) else module.padding[0]
-                # output_padding = module.output_padding if isinstance(module.output_padding, int) else module.output_padding[0]
+                k = module.kernel_size if isinstance(module.kernel_size, int) else module.kernel_size[0]
+                s = module.stride if isinstance(module.stride, int) else module.stride[0]
 
+                in_dim = prev_trf.shape[0]
+                out_dim = (in_dim - 1) * s + k
+                trf = np.full((out_dim, out_dim, 2, 2), -1, dtype=int)
+                max_trf_size = 0
                 
-                # TODO
-                receptive_field[m_key]["trf"] = prev_trf
-                receptive_field[m_key]["max_trf_size"] = prev_max_rf
+                for i in range(in_dim):
+                    for j in range(in_dim):
+                        t = j*s
+                        b = j*s+k - 1
+                        l = i*s
+                        r = i*s+k - 1
+
+                        for m in range(l, r + 1):
+                            for n in range(t, b + 1):
+                                if np.array_equal(trf[m, n], np.array([[-1, -1], [-1, -1]])):
+                                    trf[m, n] = prev_trf[i, j]
+                                else:
+                                    if prev_trf[i,j,0,0] <= trf[m,n,0,0] and prev_trf[i,j,0,1] <= trf[m,n,0,1]:
+                                        trf[m,n,0] = prev_trf[i,j,0]
+                                    else:
+                                        trf[m,n,0] = trf[m,n,0]
+                                    if prev_trf[i,j,1,0] >= trf[m,n,1,0] and prev_trf[j,j,1,1] >= trf[m,n,1,1]:
+                                        trf[m,n,1] = prev_trf[i,j,1]
+                                    else:
+                                        trf[m,n,1] = trf[m,n,1]
+                                trf_size = trf[m,n,1,0] - trf[m,n,0,0] + 1
+                                max_trf_size = max(max_trf_size, trf_size)
+
+                receptive_field[m_key]["trf"] = trf
+                receptive_field[m_key]["max_trf_size"] = max_trf_size
 
             # no changes in receptive field for batchnorm and relu
             elif class_name == "BatchNorm2d" or class_name == "ReLU":
