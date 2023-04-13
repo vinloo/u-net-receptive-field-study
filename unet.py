@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from dotmap import DotMap
+from theoretical_receptive_field import compute_trf
 
 
 class ConvBlock(nn.Module):
@@ -87,15 +88,40 @@ class UNet(nn.Module):
         self.outputs = nn.Conv2d(
             64, 1, kernel_size=conf.out.k, padding=conf.out.p, stride=conf.out.s)
 
-    def compute_trf(self, x, y):
-        """Compute the theoretical receptive field of a pixel in the output"""
-        # TODO
-        pass
 
-    def compute_erf(self, x, y):
+    def total_parameters(self) -> int:
+        """Compute the total number of parameters in the network"""
+        return sum(p.numel() for p in self.parameters())
+
+
+    def max_trf_size(self) -> int:
+        """Compute the maximum theoretical receptive field of the network"""
+        rf = compute_trf(self, 576)
+        return rf[next(reversed(rf))]["max_trf_size"]
+
+
+    def output_trfs(self):
+        rf = compute_trf(self, 576)
+        return rf[next(reversed(rf))]["trf"]
+
+
+    def pixel_trf(self, x, y):
+        """Compute the theoretical receptive field of a pixel in the output"""
+        rf = compute_trf(self, 576)
+        return rf[next(reversed(rf))]["trf"][x, y]
+
+
+    def center_trf(self):
+        """Compute the theoretical receptive field of the center pixel in the output"""
+        center = 576 // 2
+        return self.pixel_trf(center, center)
+
+
+    def pixel_erf(self, x, y):
         """Compute the effective receptive field of a pixel in the output"""
         # TODO
         pass
+
 
     def forward(self, inputs):
         s1, p1 = self.e1(inputs)

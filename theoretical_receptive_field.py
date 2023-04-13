@@ -1,28 +1,30 @@
-import torch.nn as nn
-from unet import ConvBlock, EncoderBlock, DecoderBlock, BottleNeck, UNet
 from collections import OrderedDict
+from matplotlib import pyplot as plt
 import numpy as np
+import math
 
 def simulate_convolution_trf(prev_trf, k, s, p):
     
     # get dimensions of the input image and the kernel
-    m, n = len(prev_trf), len(prev_trf)
+    l = len(prev_trf)
     prev_trf_padded = np.pad(prev_trf, ((p,p), (p,p), (0,0), (0,0)), 'edge')
 
     # compute output dimensions
-    out_m = (m - k + 2*p) // s + 1
-    out_n = (n - k + 2*p) // s + 1
-    trf = np.empty((out_m, out_n, 2, 2), dtype=int)
+    m = (l - k + 2*p) // s + 1
+    trf = np.empty((m, m, 2, 2), dtype=int)
 
     max_trf_size = 0
 
     # simulate convolution but join the receptive fields
-    for i in range(out_m):
-        for j in range(out_n):
+    for i in range(m):
+        for j in range(m):
             top_left = prev_trf_padded[i*s, j*s]
             bottom_right = prev_trf_padded[i*s+k-1, j*s+k-1]
+            
+            trf_size_a = bottom_right[1, 0] - top_left[0, 0] + 1
+            trf_size_b = bottom_right[1, 1] - top_left[0, 1] + 1
+            trf_size = int(math.sqrt(trf_size_a * trf_size_b))
 
-            trf_size = bottom_right[1, 0] - top_left[0, 0] + 1
             max_trf_size = max(max_trf_size, trf_size)
             trf[i, j, 0] = top_left[0]
             trf[i, j, 1] = bottom_right[1]
@@ -31,7 +33,7 @@ def simulate_convolution_trf(prev_trf, k, s, p):
 
 
 
-def compute_trf(model, input_dim):
+def compute_trf(model, input_dim, print_output=False):
     n_modules = 0
     receptive_field = OrderedDict()
     receptive_field["0"] = OrderedDict()
@@ -48,17 +50,17 @@ def compute_trf(model, input_dim):
     encoding = True
 
     for module in model.modules():
+        class_name = module.__class__.__name__
 
-        if type(module) not in [nn.Sequential, nn.ModuleList, nn.Module, nn.Linear, ConvBlock, EncoderBlock, DecoderBlock, BottleNeck, UNet]:
+        if class_name not in ["Sequential", "ModuleList", "Module", "Linear", "ConvBlock", "EncoderBlock", "DecoderBlock", "BottleNeck", "UNet"]:
             n_modules += 1
-        elif type(module) in [EncoderBlock, DecoderBlock, BottleNeck]:
+        elif class_name in ["EncoderBlock", "DecoderBlock", "BottleNeck"]:
             loc = n_modules + 1
-            blocks[str(loc)] = module.__class__.__name__
+            blocks[str(loc)] = class_name
             continue
         else:
             continue
 
-        class_name = module.__class__.__name__
         module_idx = len(receptive_field)
         m_key = str(module_idx)
         prev_key = str(module_idx - 1)
@@ -69,7 +71,6 @@ def compute_trf(model, input_dim):
         receptive_field[m_key]["type"] = class_name
         receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"]
 
-        # COMPUTE RECEPTIVE FIELD OF CONVOLUTION WITH SKIP CONNECTION & UPSAMLE IN DECDOER BLOCK 
         if not encoding:
             assert class_name == "Conv2d"
             receptive_field[m_key]["skip"] = receptive_field[prev_key]["skip"] - 1
@@ -88,11 +89,11 @@ def compute_trf(model, input_dim):
             concat_trf = np.zeros_like(prev_trf)
             for i in range(len(prev_trf)):
                 for j in range(len(prev_trf[0])):
-                    if prev_trf[i,j,0,0] <= skip_trf[i,j,0,0] and prev_trf[i,j,1,1] >= skip_trf[i,j,1,1]:
+                    if prev_trf[i,j,0,0] <= skip_trf[i,j,0,0] and prev_trf[i,j,1,1] <= skip_trf[i,j,1,1]:
                         concat_trf[i,j,0] = prev_trf[i,j,0]
                     else:
                         concat_trf[i,j,0] = skip_trf[i,j,0]
-                    if prev_trf[i,j,1,1] >= skip_trf[i,j,1,1] and prev_trf[i,j,0,0] <= skip_trf[i,j,0,0]:
+                    if prev_trf[i,j,1,1] >= skip_trf[i,j,1,1] and prev_trf[i,j,0,0] >= skip_trf[i,j,0,0]:
                         concat_trf[i,j,1] = prev_trf[i,j,1]
                     else:
                         concat_trf[i,j,1] = skip_trf[i,j,1]
@@ -122,7 +123,9 @@ def compute_trf(model, input_dim):
                         bottom_right = prev_trf[i*k+k-1, j*k+k-1]
                         trf[i, j, 0] = top_left[0]
                         trf[i, j, 1] = bottom_right[1]
-                        trf_size = bottom_right[1, 0] - top_left[0, 0] + 1
+                        trf_size_a = bottom_right[1, 0] - top_left[0, 0] + 1
+                        trf_size_b = bottom_right[1, 1] - top_left[0, 1] + 1
+                        trf_size = int(math.sqrt(trf_size_a * trf_size_b))
                         max_trf_size = max(max_trf_size, trf_size)
 
                 receptive_field[m_key]["trf"] = trf
@@ -171,7 +174,9 @@ def compute_trf(model, input_dim):
                                         trf[m,n,1] = prev_trf[i,j,1]
                                     else:
                                         trf[m,n,1] = trf[m,n,1]
-                                trf_size = trf[m,n,1,0] - trf[m,n,0,0] + 1
+                                trf_size_a = trf[m,n,1, 0] - trf[m,n,0, 0] + 1
+                                trf_size_b = trf[m,n,1, 1] - trf[m,n,0, 1] + 1
+                                trf_size = int(math.sqrt(trf_size_a * trf_size_b))
                                 max_trf_size = max(max_trf_size, trf_size)
 
                 receptive_field[m_key]["trf"] = trf
@@ -185,30 +190,44 @@ def compute_trf(model, input_dim):
                 continue
 
     # print the receptive field for each layer
-    line_new = "{:>5}  {:15}  {:>12} {:>10}".format("layer", "type", "max_trf_size", "skip conn.")
-    print("-" * len(line_new))
-    print(line_new)
-    print("=" * len(line_new))
-    
-    for layer in receptive_field:
-        skip_str = ""
-        if int(layer) >= 1 and receptive_field[str(int(layer) - 1)]["type"] == "ConvTranspose2d":
-            skip_str = str(receptive_field[layer]["skip"]) + " IN"
-        elif receptive_field[layer]["type"] == "ReLU" and layer in skip_indices:
-            skip_str = str(receptive_field[layer]["skip"]) + " OUT"
-
-        line_new = "{:>5}  {:15}  {:>12} {:>10}".format(
-            layer,
-            receptive_field[layer]["type"],
-            str(receptive_field[layer]["max_trf_size"]),
-            skip_str
-        )
-
-        if layer in blocks:
-            line_new = "\n" + blocks[layer] + "\n" + line_new
-
+    if print_output:
+        line_new = "{:>5}  {:15}  {:>12} {:>10}".format("layer", "type", "max_trf_size", "skip conn.")
+        print("-" * len(line_new))
         print(line_new)
+        print("=" * len(line_new))
+        
+        for layer in receptive_field:
+            skip_str = ""
+            if int(layer) >= 1 and receptive_field[str(int(layer) - 1)]["type"] == "ConvTranspose2d":
+                skip_str = str(receptive_field[layer]["skip"]) + " IN"
+            elif receptive_field[layer]["type"] == "ReLU" and layer in skip_indices:
+                skip_str = str(receptive_field[layer]["skip"]) + " OUT"
 
-    print("-" * len(line_new))
+            line_new = "{:>5}  {:15}  {:>12} {:>10}".format(
+                layer,
+                receptive_field[layer]["type"],
+                str(receptive_field[layer]["max_trf_size"]),
+                skip_str
+            )
+
+            if layer in blocks:
+                line_new = "\n" + blocks[layer] + "\n" + line_new
+
+            print(line_new)
+
+        print("-" * len(line_new))
     
     return receptive_field
+
+
+def plot_rf_sizes(rf):
+    """Plot the receptive field size of each pixel as a heatmap from a single layer"""
+    a = rf[:, :, 1, 1] - rf[:, :, 0, 1] + 1
+    b = rf[:, :, 1, 0] - rf[:, :, 0, 0] + 1
+    rf_sizes = np.sqrt(np.multiply(a, b))
+    plt.imshow(rf_sizes, cmap="plasma")
+    plt.colorbar()
+    plt.title("RF size of each pixel")
+    plt.show()
+
+
