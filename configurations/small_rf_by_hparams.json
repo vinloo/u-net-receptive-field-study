@@ -1,9 +1,9 @@
 {
-    "name": "default",
+    "name": "large_rf_by_hparams",
     "grayscale": true,
     "depth": 4,
-    "channels": [64, 128, 256, 512, 1024],
-    "conv_k": 3,
+    "channels": [128, 256, 512, 758, 1024],
+    "conv_k": 2,
     "conv_p": "same",
     "conv_s": 1,
     "pool_k": 2,

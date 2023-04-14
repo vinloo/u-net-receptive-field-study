@@ -1,8 +1,8 @@
 {
-    "name": "default",
+    "name": "small_rf_by_depth",
     "grayscale": true,
-    "depth": 4,
-    "channels": [64, 128, 256, 512, 1024],
+    "depth": 3,
+    "channels": [148, 256, 512, 1024],
     "conv_k": 3,
     "conv_p": "same",
     "conv_s": 1,

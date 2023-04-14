@@ -1,5 +1,7 @@
 # Study of Receptive Field of U-Net and Attention U-Net 
 
+[**CLICK HERE FOR THE NOTEBOOK WITH THE STUDY AND THE RESULTS**](receptive_field_study.ipynb)
+
 The U-Net in this code consists of 4 encoder blocks, a bottleneck, and 4 decoder blocks. All parameters for all layers in all blocks can be easily tuned by creating a configuration file and passing it into the UNet class. I have already created a [default configuration file](configurations/default.json) to test the UNet. This is very useful as the receptive field depends on the kernel size, stride and padding of each layer; so the RF can be tuned by tuning these parameters.
 
 > *Note*: I have yet to implement the `compute_trf` and `compute_erf` functions in the `UNet class` to compute the theoretical and effective receptive field, so I can start tuning and researching them.
