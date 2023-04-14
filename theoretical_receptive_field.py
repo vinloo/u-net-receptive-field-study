@@ -193,6 +193,9 @@ def compute_trf(model, input_dim, print_output=False):
     if print_output:
         line_new = "{:>5}  {:15}  {:>12} {:>10}".format("layer", "type", "max_trf_size", "skip conn.")
         print("-" * len(line_new))
+        print("UNet wit configuration:    ", model.config.name)
+        print("Total number of parameters:", model.total_parameters())
+        print("=" * len(line_new))
         print(line_new)
         print("=" * len(line_new))
         
@@ -218,16 +221,5 @@ def compute_trf(model, input_dim, print_output=False):
         print("-" * len(line_new))
     
     return receptive_field
-
-
-def plot_rf_sizes(rf):
-    """Plot the receptive field size of each pixel as a heatmap from a single layer"""
-    a = rf[:, :, 1, 1] - rf[:, :, 0, 1] + 1
-    b = rf[:, :, 1, 0] - rf[:, :, 0, 0] + 1
-    rf_sizes = np.sqrt(np.multiply(a, b))
-    plt.imshow(rf_sizes, cmap="plasma")
-    plt.colorbar()
-    plt.title("RF size of each pixel")
-    plt.show()
 
 

@@ -70,7 +70,7 @@ class BottleNeck(nn.Module):
 class UNet(nn.Module):
     def __init__(self, conf: DotMap):
         super().__init__()
-
+        self.config = conf
         c_in = 1 if conf.grayscale else 3
 
         self.e1 = EncoderBlock(c_in, 64, conf.enc1)

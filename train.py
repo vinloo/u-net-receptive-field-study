@@ -3,18 +3,17 @@ import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
-import json
 import argparse
 import shutil
 from utils.config import load_config
 from preprocess_data import ALL_DATASETS
 from torchvision.io import read_image
 from dotmap import DotMap
-from PIL import Image
 from unet import UNet
 from torch.utils.data import DataLoader, Dataset
 from typing import Optional
 from tqdm import tqdm, trange
+from pathlib import Path
 
 
 class SegmentationDataset(Dataset):
@@ -171,7 +170,6 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.BCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
-    # criterion = torch.nn.BCELoss(reduction='mean')
 
     trainer = Trainer(
         model=model,
@@ -189,10 +187,21 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     print("Training finished")
     print("Lowest validation loss at epoch", trainer.validation_loss.index(min(trainer.validation_loss)))
 
+    Path(f"results/{config_name}").mkdir(parents=True, exist_ok=True)
+
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
+    plt.title(f"Loss for {dataset_name}")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
     plt.legend()
-    plt.savefig(f'result_{dataset_name}_{min(trainer.validation_loss)}.png')
+    plt.savefig(f'results/{config_name}/{dataset_name}_{min(trainer.validation_loss):.3f}.png')
+
+    # also save losses to txt so it can be plotted in latex later
+    with open(f'results/{config_name}/{dataset_name}_{min(trainer.validation_loss):.3f}.txt', 'w') as f:
+        f.write(f"Training loss: {trainer.training_loss}\n")
+        f.write(f"Validation loss: {trainer.validation_loss}")
+    
 
 
 def main():
@@ -200,9 +209,9 @@ def main():
     parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
     parser.add_argument("-s", "--seed", type=int, default=42, help="random seed")
     parser.add_argument("-c", "--config", type=str, default="default", help="path to config file")
-    parser.add_argument("-e", "--epochs", type=int, default=10, help="number of epochs")
+    parser.add_argument("-e", "--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
-    parser.add_argument("-l", "--learning_rate", type=float, default=0.0001, help="learning rate")
+    parser.add_argument("-l", "--learning_rate", type=float, default=0.01, help="learning rate")
     args = parser.parse_args()
 
     config = load_config(args.config)

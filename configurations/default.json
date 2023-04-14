@@ -1,4 +1,5 @@
 {
+    "name": "default",
     "grayscale": true,
     "enc1": {
         "conv1": {

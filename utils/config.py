@@ -12,6 +12,7 @@ def load_config(config_name):
 
     try:
         assert type(config.grayscale) is bool, "config.grayscale is of the wrong type, expected bool"
+        assert type(config.name) is str, "config.name is of the wrong type, expected str"
 
         assert type(config.enc1.conv1.k) is int, "config.enc1.conv1.k is of the wrong type, expected int"
         assert type(config.enc1.conv1.s) is int, "config.enc1.conv1.s is of the wrong type, expected int"
