@@ -20,9 +20,9 @@ Training the model can be done by running `python train.py -d <dataset>`. The da
 | Dataset (`fetal_head` or `breast_cancer`) | `-d` or `--dataset`       |      yes     |    str   |                          None |
 | Seed                                      | `-s` or `--seed`          |      no      |    int   |                            42 |
 | Model config file                         | `-c` or `--config`        |      no      |    str   |                     "default" |
-| Epochs                                    | `-e` or `--epochs`        |      no      |    int   |                            10 |
+| Epochs                                    | `-e` or `--epochs`        |      no      |    int   |                           100 |
 | Batch size                                | `-b` or `--batch_size`    |      no      |    int   |                             2 |
-| Learning rate                             | `-l` or `--learning-rate` |      no      |   float  |                        0.0001 |
+| Learning rate                             | `-l` or `--learning-rate` |      no      |   float  |                          0.01 |
 
 After training, a checkpoint for each epoch will be saved at `checkpoints/{dataset_name}/{config_name}`. The last number of the file name corresponds to the validation loss at that epoch.
 
