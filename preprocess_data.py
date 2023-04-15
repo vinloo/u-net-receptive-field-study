@@ -128,8 +128,8 @@ def preprocess(dataset, val_rate, test_rate):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
-    parser.add_argument("-v", "--val_rate", type=float, default=0.2, help="validation set rate")
-    parser.add_argument("-t", "--test_rate", type=float, default=0.1, help="test set rate")
+    parser.add_argument("-v", "--val_rate", type=float, default=0.15, help="validation set rate")
+    parser.add_argument("-t", "--test_rate", type=float, default=0.15, help="test set rate")
     args = parser.parse_args()
 
     preprocess(args.dataset, args.val_rate, args.test_rate)

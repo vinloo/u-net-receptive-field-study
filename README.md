@@ -12,8 +12,8 @@ Unzip the [datasets](#datasets-used) in the `preprocessed/raw` folder and run `p
 | **Argument**                              |          **Flag**         | **Required** | **Type** |       **Default value**       |
 |-------------------------------------------|:-------------------------:|:------------:|:--------:|:-----------------------------:|
 | Dataset (`fetal_head` or `breast_cancer`) | `-d` or `--dataset`       |      yes     |    str   |                          None |
-| Validation set rate                       | `-v` or `--val_rate`      |      no      |   float  |                           0.2 |
-| Test set rate                             | `-t` or `--test_rate`     |      no      |   float  |                           0.1 |
+| Validation set rate                       | `-v` or `--val_rate`      |      no      |   float  |                          0.15 |
+| Test set rate                             | `-t` or `--test_rate`     |      no      |   float  |                          0.15 |
 
 ## Training
 Training the model can be done by running `python train.py -d <dataset>`. The dataset is the only required argument, all other arguments have default values as listed in this table:

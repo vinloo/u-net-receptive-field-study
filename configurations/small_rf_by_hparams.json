@@ -2,7 +2,7 @@
     "name": "large_rf_by_hparams",
     "grayscale": true,
     "depth": 4,
-    "channels": [128, 256, 512, 758, 1024],
+    "channels": [128, 347, 518, 758, 1024],
     "conv_k": 2,
     "conv_p": "same",
     "conv_s": 1,
