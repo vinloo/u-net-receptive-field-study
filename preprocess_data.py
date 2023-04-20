@@ -5,10 +5,12 @@ import uuid
 import cv2
 import random
 import argparse
+import numpy as np
+import nibabel as nib
 from PIL import Image
 
 
-ALL_DATASETS = ["fetal_head", "breast_cancer"]
+ALL_DATASETS = ["fetal_head", "breast_cancer", "mouse_embryo"]
 
 
 def reformat(img):
@@ -20,6 +22,12 @@ def reformat(img):
 
 def clear_data(dataset):
     """Clear existing data in data/preprocessed folder"""
+
+    if dataset == "mouse_embryo":
+        clear_data("mouse_embryo_body")
+        clear_data("mouse_embryo_bv")
+        return
+
     if os.path.exists(f"data/preprocessed/{dataset}"):
         shutil.rmtree(f"data/preprocessed/{dataset}")
     os.mkdir(f"data/preprocessed/{dataset}")
@@ -111,6 +119,106 @@ def process_breast_cancer_data(val_rate, test_rate):
 
         img.save(f"data/preprocessed/breast_cancer/{target}/{img_id}.png")
         ann.save(f"data/preprocessed/breast_cancer/{target}/masks/{img_id}.png")
+
+
+def process_mouse_embryo_data(val_rate, test_rate):
+    files = glob.glob("data/raw/mouse_embryo_combined/**/*.nii", recursive=True)
+    files.sort()
+
+    body_imgs = np.empty((576, 576, 0))
+    body_masks = np.empty((576, 576, 0))
+    bv_imgs = np.empty((576, 576, 0))
+    bv_masks = np.empty((576, 576, 0))
+
+    for i in range(len(files) // 3):
+        file_img = files[i * 3]
+        file_mask_body = files[i * 3 + 1]
+        file_mask_bv = files[i * 3 + 2]
+
+        assert file_mask_body.startswith(file_img[:-4]), file_mask_body
+        assert file_mask_bv.startswith(file_img[:-4]), file_mask_bv
+        assert file_mask_body.endswith("BODY_labels.nii"), file_mask_body
+        assert file_mask_bv.endswith("BV_labels.nii"), file_mask_bv
+
+        img = nib.load(file_img).get_fdata()
+        img = np.array(img) * 255
+        mask_body = nib.load(file_mask_body).get_fdata()
+        mask_body = np.array(mask_body)
+        mask_bv = nib.load(file_mask_bv).get_fdata()
+        mask_bv = np.array(mask_bv)
+
+        n_slices = img.shape[2]
+
+        slices = [n_slices // 4, n_slices // 3, n_slices // 2, n_slices // 3 * 2, n_slices // 4 * 3]
+
+        for slice in slices:
+            slice = n_slices // 2
+            slice_img = Image.fromarray(img[:,:,slice])
+            slice_mask_body = Image.fromarray(mask_body[:,:,slice])
+            slice_mask_bv = Image.fromarray(mask_bv[:,:,slice])
+
+            slice_img = reformat(slice_img)
+            slice_img = np.array(slice_img) / 255
+            slice_mask_body = reformat(slice_mask_body)
+            slice_mask_bv = reformat(slice_mask_bv)
+
+            if np.sum(slice_mask_body) > 0:
+                body_imgs = np.dstack((body_imgs, slice_img))
+                body_masks = np.dstack((body_masks, np.array(slice_mask_body)))
+
+            if np.sum(slice_mask_bv) > 0:
+                bv_imgs = np.dstack((bv_imgs, slice_img))
+                bv_masks = np.dstack((bv_masks, np.array(slice_mask_bv)))
+
+    assert body_imgs.shape == body_masks.shape
+    assert bv_imgs.shape == bv_masks.shape
+
+    body_idxs = np.arange(body_imgs.shape[2])
+    np.random.shuffle(body_idxs)
+    bv_idxs = np.arange(bv_imgs.shape[2])
+    np.random.shuffle(bv_idxs)
+
+    body_train_idxs = body_idxs[:int(body_imgs.shape[2] * (1 - val_rate - test_rate))]
+    body_val_idxs = body_idxs[int(body_imgs.shape[2] * (1 - val_rate - test_rate)):int(body_imgs.shape[2] * (1 - test_rate))]
+    body_test_idxs = body_idxs[int(body_imgs.shape[2] * (1 - test_rate)):]
+
+    bv_train_idxs = bv_idxs[:int(bv_imgs.shape[2] * (1 - val_rate - test_rate))]
+    bv_val_idxs = bv_idxs[int(bv_imgs.shape[2] * (1 - val_rate - test_rate)):int(bv_imgs.shape[2] * (1 - test_rate))]
+    bv_test_idxs = bv_idxs[int(bv_imgs.shape[2] * (1 - test_rate)):]
+
+    for i in body_idxs:
+        img = Image.fromarray((body_imgs[:,:,i] * 255).astype(np.uint8))
+        mask = Image.fromarray((body_masks[:,:,i] * 255).astype(np.uint8))
+
+        if i in body_train_idxs:
+            target = "train"
+        elif i in body_val_idxs:
+            target = "val"
+        elif i in body_test_idxs:
+            target = "test"
+
+        img_id = uuid.uuid4().hex
+
+        img.save(f"data/preprocessed/mouse_embryo_body/{target}/{img_id}.png")
+        mask.save(f"data/preprocessed/mouse_embryo_body/{target}/masks/{img_id}.png")
+
+    for i in bv_idxs:
+        img = Image.fromarray((bv_imgs[:,:,i] * 255).astype(np.uint8))
+        mask = Image.fromarray((bv_masks[:,:,i] * 255).astype(np.uint8))
+
+        if i in bv_train_idxs:
+            target = "train"
+        elif i in bv_val_idxs:
+            target = "val"
+        elif i in bv_test_idxs:
+            target = "test"
+
+        img_id = uuid.uuid4().hex
+
+        img.save(f"data/preprocessed/mouse_embryo_bv/{target}/{img_id}.png")
+        mask.save(f"data/preprocessed/mouse_embryo_bv/{target}/masks/{img_id}.png")
+
+
         
 
 
@@ -121,6 +229,8 @@ def preprocess(dataset, val_rate, test_rate):
         process_fetal_head_data(val_rate, test_rate)
     elif dataset == "breast_cancer":
         process_breast_cancer_data(val_rate, test_rate)
+    elif dataset == "mouse_embryo":
+        process_mouse_embryo_data(val_rate, test_rate)
     else:
         raise ValueError("Invalid dataset")
 
