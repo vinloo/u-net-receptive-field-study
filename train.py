@@ -5,7 +5,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import argparse
 import shutil
+import json
+from utils.data import SegmentationDataset
 from utils.config import load_config
+from utils.metrics import dice_score, batch_erf_rate
 from preprocess_data import ALL_DATASETS
 from torchvision.io import read_image
 from dotmap import DotMap
@@ -16,26 +19,15 @@ from tqdm import tqdm, trange
 from pathlib import Path
 
 
-class SegmentationDataset(Dataset):
-    def __init__(self,
-                 inputs: list,
-                 masks: list,
-                 ):
-        self.inputs = inputs
-        self.masks = masks
-        self.inputs_dtype = torch.float32
-        self.masks_dtype = torch.float32
-
-    def __len__(self):
-        return len(self.inputs)
-
-    def __getitem__(self, index: int):
-        input_id = self.inputs[index]
-        target_id = self.masks[index]
-        x = read_image(input_id).type(self.inputs_dtype)
-        y = read_image(target_id).type(self.masks_dtype)
-
-        return x, y
+def get_output_path(dataset_name, config_name, out_dir, clear_existing=False):
+    """Create output path for the model and the results"""
+    path = f"{out_dir}/{dataset_name}/{config_name}"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    elif clear_existing:
+        shutil.rmtree(path)
+        os.makedirs(path)
+    return path
 
 
 class Trainer:
@@ -59,20 +51,16 @@ class Trainer:
         self.device = device
         self.epochs = epochs
         self.epoch = epoch
+        self.center_trf = self.model.center_trf()
 
         self.training_loss = []
         self.validation_loss = []
         self.learning_rate = []
+        self.erf_rates = []
         self.scheduler = scheduler
 
-    def run_trainer(self, dataset_name, config_name):
-        chkp_dir = f"checkpoints/{dataset_name}/{config_name}"
-        if not os.path.exists(chkp_dir):
-            os.makedirs(chkp_dir)
-        else:
-            shutil.rmtree(chkp_dir)
-            os.makedirs(chkp_dir)
-
+    def run_trainer(self, dataset_name, config_name, out_dir):
+        out_path = get_output_path(dataset_name, config_name, out_dir, clear_existing=True)
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
             self.epoch += 1
@@ -86,13 +74,14 @@ class Trainer:
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     'loss': self.validation_loss,
-                }, f"{chkp_dir}/checkpoint_{i}_{self.validation_loss[-1]:.2f}.pt")
+                }, f"{out_path}/best_model.pt")
 
         return self.training_loss, self.validation_loss, self.learning_rate
 
     def _train(self):
         self.model.train()
         train_losses = []
+        erf_rates = []
         batch_iter = tqdm(
             enumerate(self.training_dataloader),
             "Training",
@@ -102,11 +91,14 @@ class Trainer:
 
         for _, (x, y) in batch_iter:
             input_x = x.to(self.device)
+            input_x.requires_grad = True
             target_y =  y.to(self.device) / 255
             self.optimizer.zero_grad()
             out = self.model(input_x)
             loss = self.criterion(out, target_y)
             loss_value = loss.item()
+            batch_erf = batch_erf_rate(input_x, out, self.center_trf)
+            erf_rates.extend(batch_erf)
             train_losses.append(abs(loss_value))
             loss.backward()
             self.optimizer.step()
@@ -118,6 +110,7 @@ class Trainer:
         self.training_loss.append(np.mean(train_losses))
         self.learning_rate.append(self.optimizer.param_groups[0]["lr"])
         self.scheduler.step(np.mean(train_losses))
+        self.erf_rates.append(np.mean(erf_rates))
 
         batch_iter.close()
 
@@ -148,7 +141,7 @@ class Trainer:
         batch_iter.close()
 
 
-def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.0001, seed=42):
+def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, seed=42, out_dir="out"):
     torch.manual_seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -182,27 +175,37 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         scheduler=scheduler
     )
 
-    trainer.run_trainer(dataset_name, config_name)
+    trainer.run_trainer(dataset_name, config_name, out_dir)
 
     print("Training finished")
     print("Lowest validation loss at epoch", trainer.validation_loss.index(min(trainer.validation_loss)))
 
-    Path(f"results/{config_name}").mkdir(parents=True, exist_ok=True)
+    out_path = get_output_path(dataset_name, config_name, out_dir)
 
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
+    plt.plot(trainer.erf_rates, label="ERF rate")
     plt.title(f"Loss for {dataset_name}")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
     plt.legend()
-    plt.savefig(f'results/{config_name}/{dataset_name}_{min(trainer.validation_loss):.3f}.png')
+    plt.savefig(f'{out_path}/result.png')
 
-    # also save losses to txt so it can be plotted in latex later
-    with open(f'results/{config_name}/{dataset_name}_{min(trainer.validation_loss):.3f}.txt', 'w') as f:
-        f.write(f"Training loss: {trainer.training_loss}\n")
-        f.write(f"Validation loss: {trainer.validation_loss}")
+    results = {
+        "dataset": dataset_name,
+        "config": config_name,
+        "training_loss": trainer.training_loss,
+        "validation_loss": trainer.validation_loss,
+        "learning_rate": trainer.learning_rate,
+        "training_time": int(np.argmin(trainer.validation_loss) + 1),
+        "erf_rate": trainer.erf_rates
+    }
+
+    # write results to json
+    with open(f'{out_path}/result.json', 'w') as f:
+        json.dump(results, f)
+
     
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -212,11 +215,12 @@ def main():
     parser.add_argument("-e", "--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
     parser.add_argument("-l", "--learning_rate", type=float, default=0.01, help="learning rate")
+    parser.add_argument("-0", "--output_dir", type=str, default="out", help="output folder")
     args = parser.parse_args()
 
     config = load_config(args.config)
    
-    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed)
+    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed, out_dir=args.output_dir)
     
 
 if __name__ == "__main__":

@@ -149,6 +149,7 @@ def process_mouse_embryo_data(val_rate, test_rate):
 
         n_slices = img.shape[2]
 
+        # take some slices from the image, add more to increase dataset size
         slices = [n_slices // 4, n_slices // 3, n_slices // 2, n_slices // 3 * 2, n_slices // 4 * 3]
 
         for slice in slices:

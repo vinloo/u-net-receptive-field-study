@@ -24,7 +24,8 @@ Training the model can be done by running `python train.py -d <dataset>`. The da
 | Model config file                         | `-c` or `--config`        |      no      |    str   |                     "default" |
 | Epochs                                    | `-e` or `--epochs`        |      no      |    int   |                           100 |
 | Batch size                                | `-b` or `--batch_size`    |      no      |    int   |                             2 |
-| Learning rate                             | `-l` or `--learning-rate` |      no      |   float  |                          0.01 |
+| Learning rate                             | `-l` or `--learning_rate` |      no      |   float  |                          0.01 |
+| Output folder                             | `-o` or `--output_dir`    |      no      |    str   |                      "output" |
 
 After training, a checkpoint for each epoch will be saved at `checkpoints/{dataset_name}/{config_name}`. The last number of the file name corresponds to the validation loss at that epoch.
 

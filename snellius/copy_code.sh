@@ -1,5 +1,6 @@
 scp train.py vloos@snellius.surf.nl:~/train.py
 scp unet.py vloos@snellius.surf.nl:~/unet.py
+scp job.sh vloos@snellius.surf.nl:~/job.sh
 scp utils/config.py vloos@snellius.surf.nl:~/utils/config.py
 scp utils/metrics.py vloos@snellius.surf.nl:~/utils/metrics.py
 scp preprocess_data.py vloos@snellius.surf.nl:~/preprocess_data.py
