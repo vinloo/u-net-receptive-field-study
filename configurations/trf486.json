@@ -1,0 +1,13 @@
+{
+    "name": "trf486",
+    "grayscale": true,
+    "depth": 4,
+    "channels": [28, 58, 146, 270, 510],
+    "conv_k": 6,
+    "conv_p": "same",
+    "conv_s": 1,
+    "pool_k": 2,
+    "deconv_k": 2,
+    "deconv_p": 0,
+    "deconv_s": 2
+} 

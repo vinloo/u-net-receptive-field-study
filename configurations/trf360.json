@@ -1,9 +1,9 @@
 {
-    "name": "large_rf_by_hparams",
+    "name": "trf360",
     "grayscale": true,
-    "depth": 4,
-    "channels": [128, 347, 518, 758, 1024],
-    "conv_k": 2,
+    "depth": 3,
+    "channels": [47, 83, 180, 360],
+    "conv_k": 9,
     "conv_p": "same",
     "conv_s": 1,
     "pool_k": 2,

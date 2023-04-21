@@ -1,9 +1,9 @@
 {
-    "name": "large_rf_by_depth",
+    "name": "trf54",
     "grayscale": true,
-    "depth": 5,
-    "channels": [63, 64, 115, 255, 512, 1024],
-    "conv_k": 3,
+    "depth": 3,
+    "channels": [230, 456, 765, 1245],
+    "conv_k": 2,
     "conv_p": "same",
     "conv_s": 1,
     "pool_k": 2,

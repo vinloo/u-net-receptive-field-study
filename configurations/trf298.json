@@ -1,0 +1,13 @@
+{
+    "name": "trf298",
+    "grayscale": true,
+    "depth": 4,
+    "channels": [25, 44, 110, 451, 756],
+    "conv_k": 4,
+    "conv_p": "same",
+    "conv_s": 1,
+    "pool_k": 2,
+    "deconv_k": 2,
+    "deconv_p": 0,
+    "deconv_s": 2
+} 

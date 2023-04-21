@@ -1,9 +1,9 @@
 {
-    "name": "large_rf_by_hparams",
+    "name": "trf100",
     "grayscale": true,
-    "depth": 4,
-    "channels": [25, 44, 110, 451, 756],
-    "conv_k": 4,
+    "depth": 3,
+    "channels": [145, 256, 512, 1024],
+    "conv_k": 3,
     "conv_p": "same",
     "conv_s": 1,
     "pool_k": 2,
