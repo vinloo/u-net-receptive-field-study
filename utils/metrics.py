@@ -71,4 +71,38 @@ def erf_rate_dataset(model, dataset_name, device="cuda"):
     return erf_rate
 
 
+def object_rate(center_trf, mask):
+    """Compute the object rate based on a mask and a center transform"""
+
+    len_x = center_trf[1, 0] - center_trf[0, 0] + 1
+    len_y = center_trf[1, 1] - center_trf[0, 1] + 1
+    trf_area = len_x * len_y
+
+    cols = mask.any(axis=0)
+    rows = mask.any(axis=1)
+
+    for i, v in enumerate(cols):
+        if v:
+            start_col = i
+            break
+    for i, v in enumerate(cols[::-1]):
+        if v:
+            end_col = len(cols) - i - 1
+            break
+    for i, v in enumerate(rows):
+        if v:
+            start_row = i
+            break
+    for i, v in enumerate(rows[::-1]):
+        if v:
+            end_row = len(rows) - i - 1 
+            break
+
+    object_len_x = end_col - start_col + 1
+    object_len_y = end_row - start_row + 1
+    object_area = object_len_x * object_len_y
+    object_rate = object_area / trf_area
+
+    return object_rate
+
 

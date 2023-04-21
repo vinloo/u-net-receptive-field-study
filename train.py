@@ -30,6 +30,24 @@ def get_output_path(dataset_name, config_name, out_dir, clear_existing=False):
     return path
 
 
+class EarlyStopper:
+    def __init__(self, patience=20, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.min_validation_loss = np.inf
+
+    def early_stop(self, validation_loss):
+        if validation_loss < self.min_validation_loss:
+            self.min_validation_loss = validation_loss
+            self.counter = 0
+        elif validation_loss > (self.min_validation_loss + self.min_delta):
+            self.counter += 1
+            if self.counter >= self.patience:
+                return True
+        return False
+
+
 class Trainer:
     def __init__(
         self,
@@ -60,7 +78,8 @@ class Trainer:
         self.scheduler = scheduler
 
     def run_trainer(self, dataset_name, config_name, out_dir):
-        out_path = get_output_path(dataset_name, config_name, out_dir, clear_existing=True)
+        out_path = get_output_path(dataset_name, config_name, out_dir)
+        early_stopper = EarlyStopper(patience=20)
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
             self.epoch += 1
@@ -75,6 +94,10 @@ class Trainer:
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     'loss': self.validation_loss,
                 }, f"{out_path}/best_model.pt")
+
+            if early_stopper.early_stop(self.validation_loss[-1]):
+                print(f"Stopping early because validation loss has not improved for {early_stopper.patience} epochs")
+                break
 
         return self.training_loss, self.validation_loss, self.learning_rate
 
@@ -175,6 +198,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         scheduler=scheduler
     )
 
+    get_output_path(dataset_name, config_name, out_dir, clear_existing=True)
     trainer.run_trainer(dataset_name, config_name, out_dir)
 
     print("Training finished")
