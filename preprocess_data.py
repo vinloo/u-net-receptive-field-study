@@ -10,7 +10,7 @@ import nibabel as nib
 from PIL import Image
 
 
-ALL_DATASETS = ["fetal_head", "breast_cancer", "mouse_embryo"]
+ALL_DATASETS = ["fetal_head", "breast_cancer", "mouse_embryo_body", "mouse_embryo_bv"]
 
 
 def reformat(img):

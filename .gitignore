@@ -3,9 +3,7 @@ data/raw/*
 data/preprocessed/*
 !data/preprocessed/.gitkeep
 
-checkpoints/*
-!checkpoints/.gitkeep
-
+backup
 out
 *.pt
 

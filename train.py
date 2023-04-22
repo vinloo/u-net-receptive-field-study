@@ -239,7 +239,7 @@ def main():
     parser.add_argument("-e", "--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
     parser.add_argument("-l", "--learning_rate", type=float, default=0.01, help="learning rate")
-    parser.add_argument("-0", "--output_dir", type=str, default="out", help="output folder")
+    parser.add_argument("-o", "--output_dir", type=str, default="out", help="output folder")
     args = parser.parse_args()
 
     config = load_config(args.config)
