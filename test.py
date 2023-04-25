@@ -3,6 +3,7 @@ import numpy as np
 import glob
 import os
 import pandas as pd
+import json
 from tqdm import tqdm
 from unet import UNet
 from torch.utils.data import DataLoader
@@ -17,7 +18,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 def test_model(model, configuration, dataset_name, device="cuda"):
     model.eval()
     
-    # model_small_rf_by_hparams.load_state_dict(torch.load(f"results/small_rf_by_hparams/{dataset_name}_best_model.pt")["model_state_dict"])
     inputs_test = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/test", "*.png"))
     masks_test = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/test/masks", "*.png"))
 
@@ -103,7 +103,13 @@ def test_model(model, configuration, dataset_name, device="cuda"):
     spec = np.mean(specificities)
     jacc = np.mean(jaccard_scores)
 
+    # training time from json file
+    with open(f"out/{dataset_name}/{configuration}/result.json", "r") as json_file:
+        data = json.load(json_file)
+        training_time = data["training_time"]
+
     return {
+        "training_time": training_time,
         "erf_rate": erf_rate,
         "dice_score": dsc,
         "object_rate": obj_rate,
@@ -116,6 +122,7 @@ def test_model(model, configuration, dataset_name, device="cuda"):
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
 
     configurations = os.listdir("configurations")
     configurations.remove("default.json")
@@ -133,7 +140,7 @@ if __name__ == "__main__":
                 model = UNet(config).to(device)
                 model.load_state_dict(torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"])
                 result = test_model(model, config_name, dataset_name, device)
-                dataset_results[config_name] = result
+                dataset_results[config_name] = pd.Series(result)
             except FileNotFoundError:
                 print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
         results.append(dataset_results.copy())
