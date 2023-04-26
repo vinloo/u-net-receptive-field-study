@@ -14,21 +14,44 @@ from preprocess_data import ALL_DATASETS
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def test_model(model, configuration, dataset_name, device="cuda"):
+def test_model(model, configuration, dataset_name, state, device="cuda"):
     model.eval()
-    
+    trf = model.center_trf()
+
     inputs_test = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/test", "*.png"))
     masks_test = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/test/masks", "*.png"))
 
     dataset_test = SegmentationDataset(inputs_test, masks_test)
     dataloader_test = DataLoader(dataset_test, shuffle=True)
 
-    trf = model.center_trf()
+    bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
+
+    # before_raining erf rate
+    for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration} (BT)", total=len(dataloader_test)):
+        x.requires_grad = True
+        x = x.to(device)
+        out = model(x)
+        
+        # ERF rate
+        out_center = out[:, :, 288, 288]
+        d = torch.autograd.grad(out_center, x)[0]
+        d = torch.abs(d)
+        d = (d - d.min()) / (d.max() - d.min())
+        erf = d.detach().cpu().numpy()
+        erf = np.squeeze(erf)
+        bt_erf_dist[:, :, i] = erf
+
+    bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
+
+    # metrics after training
+    model.load_state_dict(state)
+
     erf_dist = np.zeros((576, 576, len(dataloader_test)))
     dice_scores = []
     object_rates = []
-    accuratcies = []
+    accuracies = []
     sensitivities = []
     specificities = []
     jaccard_scores = []
@@ -36,7 +59,6 @@ def test_model(model, configuration, dataset_name, device="cuda"):
     for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration}", total=len(dataloader_test)):
         x.requires_grad = True
         x = x.to(device)
-        y_true = y / 255
         out = model(x)
         
         # ERF rate
@@ -64,7 +86,7 @@ def test_model(model, configuration, dataset_name, device="cuda"):
 
         # accuracy
         acc = accuracy(out, np.squeeze(y.numpy()))
-        accuratcies.append(acc)
+        accuracies.append(acc)
 
         # sensitivity
         sens = sensitivity(out, np.squeeze(y.numpy()))
@@ -84,7 +106,7 @@ def test_model(model, configuration, dataset_name, device="cuda"):
     # classification metrics
     dsc = np.mean(dice_scores)
     obj_rate = np.mean(object_rates)
-    acc = np.mean(accuratcies)
+    acc = np.mean(accuracies)
     sens = np.mean(sensitivities)
     spec = np.mean(specificities)
     jacc = np.mean(jaccard_scores)
@@ -96,6 +118,7 @@ def test_model(model, configuration, dataset_name, device="cuda"):
 
     return {
         "training_time": training_time,
+        "erf_rate_before_training": bt_erf_rate,
         "erf_rate": erf_rate,
         "dice_score": dsc,
         "object_rate": obj_rate,
@@ -118,27 +141,18 @@ if __name__ == "__main__":
 
     results = []
 
-    # for dataset_name in ALL_DATASETS:
-    #     dataset_results = pd.DataFrame(columns=configurations)
-    #     for config_name in configurations:
-    #         try:
-    #             config = load_config(config_name)
-    #             model = UNet(config).to(device)
-    #             model.load_state_dict(torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"])
-    #             result = test_model(model, config_name, dataset_name, device)
-    #             dataset_results[config_name] = pd.Series(result)
-    #         except FileNotFoundError:
-    #             print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
-    #     results.append(dataset_results.copy())
-
-    
-    config = load_config('trf204')
-    model = UNet(config).to(device)
-    model.load_state_dict(torch.load(f"out/breast_cancer/trf204/best_model.pt")["model_state_dict"])
-    result = test_model(model, "trf204", "breast_cancer", device)
-    print(result)
-    import sys
-    sys.exit()
+    for dataset_name in ALL_DATASETS:
+        dataset_results = pd.DataFrame(columns=configurations)
+        for config_name in configurations:
+            try:
+                config = load_config(config_name)
+                model = UNet(config).to(device)
+                state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
+                result = test_model(model, config_name, dataset_name, state, device)
+                dataset_results[config_name] = pd.Series(result)
+            except FileNotFoundError:
+                print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
+        results.append(dataset_results.copy())
 
     results = pd.concat(results, axis=0, keys=ALL_DATASETS)
     print(results)
