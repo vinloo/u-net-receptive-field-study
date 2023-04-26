@@ -8,7 +8,7 @@ from tqdm import tqdm
 from unet import UNet
 from torch.utils.data import DataLoader
 from utils.config import load_config
-from utils.metrics import dice_score, erf_rate_dataset, object_rate
+from utils.metrics import dice_score, erf_rate_from_dist, object_rate, jaccard_index, specificity, sensitivity, accuracy
 from utils.data import SegmentationDataset
 from preprocess_data import ALL_DATASETS
 
@@ -57,43 +57,29 @@ def test_model(model, configuration, dataset_name, device="cuda"):
         # dice score
         dicescore = dice_score(out, np.squeeze(y.numpy()))
         dice_scores.append(dicescore)
+
+        # object rate
         obectrate = object_rate(trf, np.squeeze(y.numpy()))
         object_rates.append(obectrate)
 
         # accuracy
-        accuracy = np.sum(out == np.squeeze(y.numpy())) / (576*576)
-        accuratcies.append(accuracy)
+        acc = accuracy(out, np.squeeze(y.numpy()))
+        accuratcies.append(acc)
 
         # sensitivity
-        numerator = np.sum((out == 1) & (np.squeeze(y.numpy()) == 1))
-        denominator = np.sum(np.squeeze(y.numpy()) == 1)
-        if denominator == 0:
-            sensitivity = 0
-        else:
-            sensitivity = numerator / denominator
-        sensitivities.append(sensitivity)
+        sens = sensitivity(out, np.squeeze(y.numpy()))
+        sensitivities.append(sens)
 
         # specificity
-        specificity = np.sum((out == 0) & (np.squeeze(y.numpy()) == 0)) / np.sum(np.squeeze(y.numpy()) == 0)
-        specificities.append(specificity)
+        spec = specificity(out, np.squeeze(y.numpy()))
+        specificities.append(spec)
 
-        # jaccard score
-        numerator = np.sum((out == 1) & (np.squeeze(y.numpy()) == 1))
-        denominator = np.sum((out == 1) | (np.squeeze(y.numpy()) == 1))
-        if denominator == 0:
-            jaccard = 0
-        else:
-            jaccard = numerator / denominator
+        jaccard = jaccard_index(out, np.squeeze(y.numpy()))
         jaccard_scores.append(jaccard)
 
 
     # ERF rate
-    erf = np.mean(erf_dist, axis=2)
-    start = trf[0, 0], trf[0, 1]
-    len_x = trf[1, 0] - trf[0, 0] + 1
-    len_y = trf[1, 1] - trf[0, 1] + 1
-    rf_zone = erf[start[0]:start[0] + len_y, start[1]:start[1]+len_x]
-    erf_rate = np.sum(rf_zone > 0.025) / (len_x*len_y) * (1 + rf_zone[rf_zone > 0.025].mean())
+    erf_rate = erf_rate_from_dist(erf_dist, trf)
 
     # classification metrics
     dsc = np.mean(dice_scores)
@@ -132,18 +118,27 @@ if __name__ == "__main__":
 
     results = []
 
-    for dataset_name in ALL_DATASETS:
-        dataset_results = pd.DataFrame(columns=configurations)
-        for config_name in configurations:
-            try:
-                config = load_config(config_name)
-                model = UNet(config).to(device)
-                model.load_state_dict(torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"])
-                result = test_model(model, config_name, dataset_name, device)
-                dataset_results[config_name] = pd.Series(result)
-            except FileNotFoundError:
-                print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
-        results.append(dataset_results.copy())
+    # for dataset_name in ALL_DATASETS:
+    #     dataset_results = pd.DataFrame(columns=configurations)
+    #     for config_name in configurations:
+    #         try:
+    #             config = load_config(config_name)
+    #             model = UNet(config).to(device)
+    #             model.load_state_dict(torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"])
+    #             result = test_model(model, config_name, dataset_name, device)
+    #             dataset_results[config_name] = pd.Series(result)
+    #         except FileNotFoundError:
+    #             print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
+    #     results.append(dataset_results.copy())
+
+    
+    config = load_config('trf204')
+    model = UNet(config).to(device)
+    model.load_state_dict(torch.load(f"out/breast_cancer/trf204/best_model.pt")["model_state_dict"])
+    result = test_model(model, "trf204", "breast_cancer", device)
+    print(result)
+    import sys
+    sys.exit()
 
     results = pd.concat(results, axis=0, keys=ALL_DATASETS)
     print(results)

@@ -4,12 +4,34 @@ import os
 import torch
 from utils.data import SegmentationDataset
 from torch.utils.data import DataLoader
+from sklearn.metrics import confusion_matrix
 
 def dice_score(arr1, arr2):
     intersection = np.sum(np.logical_and(arr1, arr2))
     union = np.sum(np.logical_or(arr1, arr2))
     dice_score = (2.0 * intersection) / (union + intersection)
     return dice_score
+
+
+def erf_rate_from_dist(erf_dist, trf):
+    erf = np.mean(erf_dist, axis=2)
+    start = trf[0, 0], trf[0, 1]
+    len_x = trf[1, 0] - trf[0, 0] + 1
+    len_y = trf[1, 1] - trf[0, 1] + 1
+    rf_zone = erf[start[0]:start[0] + len_y, start[1]:start[1]+len_x]
+
+    data = rf_zone.ravel()
+    nbins = 100
+    hist, bin_edges = np.histogram(data, bins=nbins)
+    bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+
+    n_range = nbins // 10
+
+    for i, bin in enumerate(hist):
+        if bin < np.mean(hist[i-n_range:i+n_range//2]):
+            threshold = bin_centers[i]
+            erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
+            return erf_rate
 
 
 def batch_erf_rate(batch_in, out, trf):
@@ -40,7 +62,7 @@ def batch_erf_rate(batch_in, out, trf):
         for i, bin in enumerate(hist):
             if bin < np.mean(hist[i-n_range:i+n_range//2]):
                 threshold = bin_centers[i]
-                erf_rate = torch.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
+                erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
                 erf_rates.append(erf_rate.item())
                 break
 
@@ -90,7 +112,7 @@ def erf_rate_dataset(model, dataset_name, device="cuda"):
     for i, bin in enumerate(hist):
         if bin < np.mean(hist[i-n_range:i+n_range//2]):
             threshold = bin_centers[i]
-            erf_rate = torch.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
+            erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
     return erf_rate
 
 
@@ -129,3 +151,37 @@ def object_rate(center_trf, mask):
     return object_rate
 
 
+def jaccard_index(im1, im2):
+    im1 = im1.astype(np.bool)
+    im2 = im2.astype(np.bool)
+
+    assert im1.shape == im2.shape
+
+    intersection = np.logical_and(im1, im2)
+    union = np.logical_or(im1, im2)
+    return intersection.sum() / float(union.sum())
+
+
+def specificity(im1, im2):
+    im1 = im1.flatten()
+    im2 = im2.flatten()
+    cm = confusion_matrix(im1,im2)
+    tn = cm[0,0]
+    fp = cm[0,1]
+    specificity = tn / (tn+fp)
+    return specificity
+
+
+def sensitivity(im1, im2):
+    im1 = im1.flatten()
+    im2 = im2.flatten()
+    cm = confusion_matrix(im1,im2)
+    tp = cm[1,1]
+    fn = cm[1,0]
+    sensitivity = tp / (tp+fn)
+    return sensitivity
+
+
+def accuracy(im1, im2):
+    acc = np.sum(im1 == im2) / (576**2)
+    return acc
