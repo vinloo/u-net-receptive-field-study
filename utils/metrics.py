@@ -2,9 +2,11 @@ import numpy as np
 import glob
 import os
 import torch
+import seaborn as sns
 from utils.data import SegmentationDataset
 from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix
+from scipy import signal
 
 def dice_score(arr1, arr2):
     intersection = np.sum(np.logical_and(arr1, arr2))
@@ -53,18 +55,25 @@ def batch_erf_rate(batch_in, out, trf):
         rf_zone = img[start[0]:start[0] + len_y, start[1]:start[1]+len_x]
 
         data = rf_zone.ravel()
-        nbins = 100
-        hist, bin_edges = np.histogram(data, bins=nbins)
-        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
 
-        n_range = nbins // 10
+        kde = sns.histplot(data, kde=True, bins=100).get_lines()[0].get_data()
+        
+        # first try to find first trough of the KDE (if bimodally distributed)
+        peaks = signal.find_peaks(-kde[1])[0]                                 
+        if len(peaks) > 0:
+            peak = peaks[0]
+        else:
+            # find first low point after first peak
+            for i, bin in enumerate(kde[1]):
+                if i < 10 or i > len(kde[1]) - 5:
+                    continue
+                elif bin < np.mean(kde[1][i-10:i+5]):
+                    peak = i
+                    break
 
-        for i, bin in enumerate(hist):
-            if bin < np.mean(hist[i-n_range:i+n_range//2]):
-                threshold = bin_centers[i]
-                erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
-                erf_rates.append(erf_rate.item())
-                break
+        threshold = kde[0][peak]
+        erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
+        erf_rates.append(erf_rate.item())
 
     return erf_rates
 
@@ -103,16 +112,23 @@ def erf_rate_dataset(model, dataset_name, device="cuda"):
     rf_zone = img[start[0]:start[0] + len_y, start[1]:start[1]+len_x]
 
     data = rf_zone.ravel()
-    nbins = 100
-    hist, bin_edges = np.histogram(data, bins=nbins)
-    bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+    kde = sns.histplot(data, kde=True, bins=100).get_lines()[0].get_data()
+        
+    # first try to find first trough of the KDE (if bimodally distributed)
+    peaks = signal.find_peaks(-kde[1])[0]                                 
+    if len(peaks) > 0:
+        peak = peaks[0]
+    else:
+        # find first low point after first peak
+        for i, bin in enumerate(kde[1]):
+            if i < 10 or i > len(kde[1]) - 5:
+                continue
+            elif bin < np.mean(kde[1][i-10:i+5]):
+                peak = i
+                break
 
-    n_range = nbins // 10
-
-    for i, bin in enumerate(hist):
-        if bin < np.mean(hist[i-n_range:i+n_range//2]):
-            threshold = bin_centers[i]
-            erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
+    threshold = kde[0][peak]
+    erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
     return erf_rate
 
 
