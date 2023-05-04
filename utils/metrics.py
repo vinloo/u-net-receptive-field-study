@@ -45,6 +45,7 @@ def batch_erf_rate(batch_in, out, trf):
         img = d[i, :, :, :]
         img = torch.abs(img)
         img = (img - img.min()) / (img.max() - img.min())
+        img = torch.nan_to_num(img) # if all pixels are predicted 0, then img will be nan
 
         img = torch.squeeze(img)
 
@@ -97,6 +98,7 @@ def erf_rate_dataset(model, dataset_name, device="cuda"):
         d = torch.autograd.grad(out_center, x)[0]
         d = torch.abs(d)
         d = (d - d.min()) / (d.max() - d.min())
+        d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
 
         img = d.detach().cpu().numpy()
         img = np.squeeze(img)
@@ -184,6 +186,8 @@ def specificity(im1, im2):
     cm = confusion_matrix(im1,im2)
     tn = cm[0,0]
     fp = cm[0,1]
+    if tn == 0:
+        return 0
     specificity = tn / (tn+fp)
     return specificity
 
@@ -194,6 +198,8 @@ def sensitivity(im1, im2):
     cm = confusion_matrix(im1,im2)
     tp = cm[1,1]
     fn = cm[1,0]
+    if tp == 0:
+        return 0
     sensitivity = tp / (tp+fn)
     return sensitivity
 

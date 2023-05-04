@@ -66,6 +66,7 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
         d = torch.autograd.grad(out_center, x)[0]
         d = torch.abs(d)
         d = (d - d.min()) / (d.max() - d.min())
+        d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
         erf = d.detach().cpu().numpy()
         erf = np.squeeze(erf)
         erf_dist[:, :, i] = erf
@@ -138,6 +139,9 @@ if __name__ == "__main__":
     configurations = [config[:-5] for config in configurations if config.endswith(".json")]
     configurations.sort()
     configurations = sorted(configurations, key=len)
+
+    configurations = ["trf146"]
+    ALL_DATASETS = ["mouse_embryo_body"]
 
     results = []
 
