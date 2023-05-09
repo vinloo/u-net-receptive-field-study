@@ -181,8 +181,8 @@ def jaccard_index(im1, im2):
 
 
 def specificity(im1, im2):
-    im1 = im1.flatten()
-    im2 = im2.flatten()
+    im1 = im1.flatten().astype(np.bool)
+    im2 = im2.flatten().astype(np.bool)
     cm = confusion_matrix(im1,im2)
     tn = cm[0,0]
     fp = cm[0,1]
@@ -193,8 +193,8 @@ def specificity(im1, im2):
 
 
 def sensitivity(im1, im2):
-    im1 = im1.flatten()
-    im2 = im2.flatten()
+    im1 = im1.flatten().astype(np.bool)
+    im2 = im2.flatten().astype(np.bool)
     cm = confusion_matrix(im1,im2)
     tp = cm[1,1]
     fn = cm[1,0]

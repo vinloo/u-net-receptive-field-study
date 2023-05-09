@@ -30,6 +30,7 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
 
     # before_raining erf rate
     for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration} (BT)", total=len(dataloader_test)):
+        y /= 255
         x.requires_grad = True
         x = x.to(device)
         out = model(x)
@@ -57,6 +58,7 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
     jaccard_scores = []
 
     for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration}", total=len(dataloader_test)):
+        y /= 255
         x.requires_grad = True
         x = x.to(device)
         out = model(x)
@@ -139,9 +141,6 @@ if __name__ == "__main__":
     configurations = [config[:-5] for config in configurations if config.endswith(".json")]
     configurations.sort()
     configurations = sorted(configurations, key=len)
-
-    configurations = ["trf146"]
-    ALL_DATASETS = ["mouse_embryo_body"]
 
     results = []
 
