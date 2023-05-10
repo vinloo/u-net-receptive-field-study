@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from utils.config import load_config
 from utils.metrics import dice_score, erf_rate_from_dist, object_rate, jaccard_index, specificity, sensitivity, accuracy
 from utils.data import SegmentationDataset
-from preprocess_data import ALL_DATASETS
+from utils.data import ALL_DATASETS
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)

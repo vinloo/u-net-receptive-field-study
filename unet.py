@@ -65,7 +65,7 @@ class BottleNeck(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, conf: DotMap):
+    def __init__(self, conf: DotMap, n_labels: int = 1):
         super().__init__()
         self.config = conf
         c_in = 1 if conf.grayscale else 3
@@ -83,7 +83,7 @@ class UNet(nn.Module):
         for i in range(conf.depth, 0, -1):
             self.decoders.append(DecoderBlock(conf.channels[i], conf.channels[i-1], conf))
 
-        self.outputs = nn.Conv2d(conf.channels[0], 1, kernel_size=1, padding=0, stride=1)
+        self.outputs = nn.Conv2d(conf.channels[0], n_labels, kernel_size=1, padding=0, stride=1)
 
 
     def total_parameters(self) -> int:
@@ -112,12 +112,6 @@ class UNet(nn.Module):
         """Compute the theoretical receptive field of the center pixel in the output"""
         center = 576 // 2
         return self.pixel_trf(center, center)
-
-
-    def pixel_erf(self, x, y):
-        """Compute the effective receptive field of a pixel in the output"""
-        # TODO
-        pass
 
 
     def forward(self, inputs):

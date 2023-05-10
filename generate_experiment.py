@@ -1,5 +1,5 @@
 import os
-from preprocess_data import ALL_DATASETS
+from utils.data import ALL_DATASETS
 
 """Create a command to run all the experiments"""
 
@@ -11,7 +11,7 @@ configurations = sorted(configurations, key=len)
 
 commands = []
 
-for dataset in ALL_DATASETS:
+for dataset in ALL_DATASETS.keys():
     for config in configurations:
         commands.append(f"python train.py -d {dataset} -c {config} -b 2 -e 100 -l 0.01")
     

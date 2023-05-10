@@ -9,7 +9,7 @@ import json
 from utils.data import SegmentationDataset
 from utils.config import load_config
 from utils.metrics import dice_score, batch_erf_rate
-from preprocess_data import ALL_DATASETS
+from utils.data import ALL_DATASETS
 from torchvision.io import read_image
 from dotmap import DotMap
 from unet import UNet
@@ -182,7 +182,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
-    model = UNet(config).to(device)
+    model = UNet(config, ALL_DATASETS[dataset_name]["n_labels"]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.BCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
@@ -233,7 +233,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS, required=True)
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys(), required=True)
     parser.add_argument("-s", "--seed", type=int, default=42, help="random seed")
     parser.add_argument("-c", "--config", type=str, default="default", help="path to config file")
     parser.add_argument("-e", "--epochs", type=int, default=100, help="number of epochs")
