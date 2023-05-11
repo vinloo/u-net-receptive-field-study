@@ -11,6 +11,7 @@ import pydicom
 from PIL import Image
 from tqdm import tqdm
 from utils.data import ALL_DATASETS
+from matplotlib import pyplot as plt
 
 
 def reformat(img):
@@ -129,7 +130,7 @@ def process_mouse_embryo_data(val_rate, test_rate):
     while n_train + n_val + n_test > n_samples:
         n_train -= 1
 
-    for i in tqdm(range(n_samples)):
+    for i in tqdm(range(n_samples), total=n_samples):
 
         if i < n_train:
             target = "train"
@@ -215,7 +216,7 @@ def process_pancreas_data(val_rate, test_rate):
         n_train -= 1
 
 
-    for i, (img_vol, mask_vol) in tqdm(enumerate(zip(files_img, files_mask))):
+    for i, (img_vol, mask_vol) in tqdm(enumerate(zip(files_img, files_mask)), total=n_samples):
         masks = nib.load(mask_vol).get_fdata()
         masks = np.array(masks)
         masks = (masks - masks.min()) / (masks.max() - masks.min()) * 255
@@ -254,8 +255,122 @@ def process_pancreas_data(val_rate, test_rate):
             mask.save(f"data/preprocessed/pancreas/{target}/masks/{img_id}.png")
 
 
+def process_brain_data(val_rate, test_rate):
+    files = glob.glob("data/raw/brain_mri/kaggle_3m/**/*.tif", recursive=True)
 
+    files_img = [f for f in files if "mask" not in f]
+    files_mask = [f for f in files if "mask" in f]
+    files_img.sort(key=lambda x: (len(x), x))
+    files_mask.sort(key=lambda x: (len(x), x))
 
+    assert len(files_img) == len(files_mask)
+    files = list(zip(files_img, files_mask))
+    for f, m in files:
+        assert f[:72] == m[:72]
+
+    files_dict = dict()
+
+    for imgfile, maskfile in files:
+        key = imgfile.split("/")[-1].split("_")[3]
+        assert key == maskfile.split("/")[-1].split("_")[3]
+        if key not in files_dict:
+            files_dict[key] = [(imgfile, maskfile)]
+        else:
+            files_dict[key].append((imgfile, maskfile))
+
+    files = list(files_dict.values())
+
+    n_samples = len(files)
+    n_train = int(n_samples * (1 - val_rate - test_rate))
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+
+    while n_train + n_val + n_test > n_samples:
+        n_train -= 1
+
+    random.shuffle(files)
+
+    for i, vol in tqdm(enumerate(files), total=len(files)):
+        if i < n_train:
+            target = "train"
+        elif i >= n_train and i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        for j, (imgfile, maskfile) in enumerate(vol):
+            img = plt.imread(imgfile)
+            img = (img - img.min()) / (img.max() - img.min()) * 255
+            img = img.astype(np.uint8)
+            mask = plt.imread(maskfile)
+            if mask.sum() != 0:
+                mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+            mask = mask.astype(np.uint8)
+
+            assert img.min() >= 0 and img.max() <= 255
+            assert set(mask.flatten()).issubset({0, 255})
+
+            mask = Image.fromarray(mask)
+            img = Image.fromarray(img)
+            img = reformat(img)
+            mask = reformat(mask)
+
+            img_id = uuid.uuid4().hex
+
+            img.save(f"data/preprocessed/brain_tumor/{target}/{img_id}.png")
+            mask.save(f"data/preprocessed/brain_tumor/{target}/masks/{img_id}.png")
+            
+
+def process_prostate_data(val_rate, test_rate):
+    files = glob.glob("data/raw/prostate_mri/**/*.nii.gz", recursive=True)
+    files.sort()
+    files_img = [f for f in files if "segmentation" not in f.lower()]
+    files_mask = [f for f in files if "segmentation" in f.lower()]
+    assert len(files_img) == len(files_mask), (len(files_img), len(files_mask))
+    files = list(zip(files_img, files_mask))
+    for imgfile, maskfile in files:
+        assert imgfile[:-7] == maskfile[:-20]
+
+    random.shuffle(files)
+
+    n_samples = len(files)
+    n_train = int(n_samples * (1 - val_rate - test_rate))
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+
+    while n_train + n_val + n_test > n_samples:
+            n_train -= 1
+
+    for i, (imgfile, maskfile) in tqdm(enumerate(files), total=n_samples):
+        if i < n_train:
+            target = "train"
+        elif i >= n_train and i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        img = nib.load(imgfile).get_fdata()
+        img = np.array(img)
+        img = (img - img.min()) / (img.max() - img.min()) * 255
+        img = img.astype(np.uint8)
+        mask = nib.load(maskfile).get_fdata()
+        mask = np.array(mask)
+        mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+        mask = mask.astype(np.uint8)
+
+        for slice in range(img.shape[2]):
+            img_slice = img[:, :, slice]
+            mask_slice = mask[:, :, slice]
+            img_slice = Image.fromarray(img_slice)
+            mask_slice = Image.fromarray(mask_slice)
+
+            img_slice = reformat(img_slice)
+            mask_slice = reformat(mask_slice)
+
+            img_id = uuid.uuid4().hex
+            img_slice.save(f"data/preprocessed/prostate/{target}/{img_id}.png")
+            mask_slice.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
+         
 
 def preprocess(dataset, val_rate, test_rate):
     clear_data(dataset)
@@ -268,6 +383,10 @@ def preprocess(dataset, val_rate, test_rate):
         process_mouse_embryo_data(val_rate, test_rate)
     elif dataset == "pancreas":
         process_pancreas_data(val_rate, test_rate)
+    elif dataset == "brain_tumor":
+        process_brain_data(val_rate, test_rate)
+    elif dataset == "prostate":
+        process_prostate_data(val_rate, test_rate)
     else:
         raise ValueError("Invalid dataset")
 
