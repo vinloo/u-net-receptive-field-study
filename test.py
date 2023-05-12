@@ -20,10 +20,7 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
     model.eval()
     trf = model.center_trf()
 
-    inputs_test = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/test", "*.png"))
-    masks_test = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/test/masks", "*.png"))
-
-    dataset_test = SegmentationDataset(inputs_test, masks_test)
+    dataset_test = SegmentationDataset(dataset_name, "test")
     dataloader_test = DataLoader(dataset_test, shuffle=True)
 
     bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
@@ -160,4 +157,4 @@ if __name__ == "__main__":
     results = pd.concat(results, axis=0, keys=ALL_DATASETS)
     print(results)
     print("\nSaving results to results.csv...")
-    results.to_csv("results.csv")
+    results.to_csv("out/results.csv")

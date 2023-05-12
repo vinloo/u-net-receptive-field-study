@@ -74,7 +74,7 @@ class Trainer:
         self.training_loss = []
         self.validation_loss = []
         self.learning_rate = []
-        self.erf_rates = []
+        # self.erf_rates = []
         self.scheduler = scheduler
 
     def run_trainer(self, dataset_name, config_name, out_dir):
@@ -104,7 +104,7 @@ class Trainer:
     def _train(self):
         self.model.train()
         train_losses = []
-        erf_rates = []
+        # erf_rates = []
         batch_iter = tqdm(
             enumerate(self.training_dataloader),
             "Training",
@@ -120,8 +120,8 @@ class Trainer:
             out = self.model(input_x)
             loss = self.criterion(out, target_y)
             loss_value = loss.item()
-            batch_erf = batch_erf_rate(input_x, out, self.center_trf)
-            erf_rates.extend(batch_erf)
+            # batch_erf = batch_erf_rate(input_x, out, self.center_trf)
+            # erf_rates.extend(batch_erf)
             train_losses.append(abs(loss_value))
             loss.backward()
             self.optimizer.step()
@@ -133,7 +133,7 @@ class Trainer:
         self.training_loss.append(np.mean(train_losses))
         self.learning_rate.append(self.optimizer.param_groups[0]["lr"])
         self.scheduler.step(np.mean(train_losses))
-        self.erf_rates.append(np.mean(erf_rates))
+        # self.erf_rates.append(np.mean(erf_rates))
 
         batch_iter.close()
 
@@ -170,19 +170,12 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
-    inputs_train = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/train", "*.png"))
-    masks_train = glob.glob(os.path.join(
-        f"data/preprocessed/{dataset_name}/train/masks", "*.png"))
-    inputs_val = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/val", "*.png"))
-    masks_val = glob.glob(os.path.join(
-        f"data/preprocessed/{dataset_name}/val/masks", "*.png"))
-
-    dataset_train = SegmentationDataset(inputs_train, masks_train)
-    dataset_val = SegmentationDataset(inputs_val, masks_val)
+    dataset_train = SegmentationDataset(dataset_name, "train")
+    dataset_val = SegmentationDataset(dataset_name, "val")
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
-    model = UNet(config, ALL_DATASETS[dataset_name]["n_labels"]).to(device)
+    model = UNet(config, dataset_train.n_labels).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.BCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
@@ -208,7 +201,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
-    plt.plot(trainer.erf_rates, label="ERF rate")
+    # plt.plot(trainer.erf_rates, label="ERF rate")
     plt.title(f"Loss for {dataset_name}")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
@@ -222,7 +215,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         "validation_loss": trainer.validation_loss,
         "learning_rate": trainer.learning_rate,
         "training_time": int(np.argmin(trainer.validation_loss) + 1),
-        "erf_rate": trainer.erf_rates
+        # "erf_rate": trainer.erf_rates
     }
 
     # write results to json

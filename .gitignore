@@ -6,5 +6,6 @@ data/preprocessed/*
 backup
 out
 *.pt
+*.zip
 
 __pycache__

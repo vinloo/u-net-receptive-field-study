@@ -1,20 +1,34 @@
 from torch.utils.data import DataLoader, Dataset
 import torch
+import glob
+import os
 from torchvision.io import read_image
 from enum import Enum
 
 
 class SegmentationDataset(Dataset):
-    def __init__(self,
-                 inputs: list,
-                 masks: list,
-                 n_labels: int = 1,
-                 ):
-        self.inputs = inputs
-        self.masks = masks
+    def __init__(self, name: str, subset: str):
+        self.name = name
+        if name not in ALL_DATASETS:
+            raise ValueError(f"Dataset {name} not found")
+        
+        self.n_labels = ALL_DATASETS[name]["n_labels"]
+        self.labels = ALL_DATASETS[name]["labels"]
+        self.modality = ALL_DATASETS[name]["modality"]
+    
+        if self.n_labels == 1:
+            self.inputs = glob.glob(f"data/preprocessed/{name}/{subset}/*.png")
+            self.masks = glob.glob(f"data/preprocessed/{name}/{subset}/masks/*.png")
+        else:
+            self.inputs = glob.glob(f"data/preprocessed/{name}/{subset}/*.png")
+            masks = glob.glob(f"data/preprocessed/{name}/{subset}/masks/**/*.png")
+            self.masks = []
+            for i in range(len(masks) // self.n_labels):
+                self.masks.append(tuple(masks[i * self.n_labels: (i + 1) * self.n_labels]))
+            assert len(self.inputs) == len(self.masks)
+
         self.inputs_dtype = torch.float32
         self.masks_dtype = torch.float32
-        self.n_labels = n_labels
 
     def __len__(self):
         return len(self.inputs)
@@ -25,10 +39,19 @@ class SegmentationDataset(Dataset):
             target_id = self.masks[index]
             x = read_image(input_id).type(self.inputs_dtype)
             y = read_image(target_id).type(self.masks_dtype)
-            return x, y
         else:
-            assert self.labels > 1
-            # TODO: implement multi-label segmentation
+            assert self.n_labels > 1
+            input_id = self.inputs[index]
+            target_ids = self.masks[index]
+            x = read_image(input_id).type(self.inputs_dtype)
+            y = []
+            for i in range(self.n_labels):
+                y.append(read_image(target_ids[i]).type(self.masks_dtype))
+            y = torch.cat(y, dim=0)
+            
+        # treshold y to only 0 and 255
+        y = torch.where(y > 0.5, torch.tensor(255, dtype=self.masks_dtype), torch.tensor(0, dtype=self.masks_dtype))
+        return x, y
     
 
 class Modality(Enum):

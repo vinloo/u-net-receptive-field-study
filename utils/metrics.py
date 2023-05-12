@@ -40,7 +40,7 @@ def batch_erf_rate(batch_in, out, trf):
     """Compute the ERF rate for a batch of images, to be used by trainer"""
     erf_rates = []
     for i in range(batch_in.shape[0]):
-        out_center = out[i, :, 288, 288]
+        out_center = out[i, 0, 288, 288]
         d = torch.autograd.grad(out_center, batch_in, retain_graph=True)[0]
         img = d[i, :, :, :]
         img = torch.abs(img)
@@ -53,7 +53,7 @@ def batch_erf_rate(batch_in, out, trf):
         len_x = trf[1, 0] - trf[0, 0] + 1
         len_y = trf[1, 1] - trf[0, 1] + 1
 
-        rf_zone = img[start[0]:start[0] + len_y, start[1]:start[1]+len_x]
+        rf_zone = img[start[0]:start[0] + len_y, start[1]:start[1]+len_x].detach().cpu().numpy()
 
         data = rf_zone.ravel()
 
@@ -93,7 +93,7 @@ def erf_rate_dataset(model, dataset_name, device="cuda"):
         x.requires_grad = True
         x = x.to(device)
         out = model(x)
-        out_center = out[:, :, 288, 288]
+        out_center = out[:, 0, 288, 288]
 
         d = torch.autograd.grad(out_center, x)[0]
         d = torch.abs(d)
