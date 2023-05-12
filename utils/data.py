@@ -54,9 +54,9 @@ ALL_DATASETS = {
         "n_labels": 2,
         "modality": Modality.ULTRASOUND,
     },
-    "covid_19": {
-        "labels": ["ground-glass", "consolidation", "pleural-effusion"],
-        "n_labels": 3,
+    "covid": {
+        "labels": ["infection"],
+        "n_labels": 1,
         "modality": Modality.CT,
     },
     "pancreas": {

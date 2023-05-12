@@ -372,6 +372,54 @@ def process_prostate_data(val_rate, test_rate):
             mask_slice.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
          
 
+def preprocess_covid_data(val_rate, test_rate):
+    files_img = glob.glob("data/raw/covid_ct/COVID-19-CT-Seg_20cases/**/*.nii.gz", recursive=True)
+    files_img.sort(key=lambda x: (len(x), x))
+    files_mask = glob.glob("data/raw/covid_ct/Infection_Mask/**/*.nii.gz", recursive=True)
+    files_mask.sort(key=lambda x: (len(x), x))
+    files = list(zip(files_img, files_mask))
+
+    for f, m in files:
+        assert f[-22:] == m[-22:]
+
+    n_samples = len(files)
+    n_train = int(n_samples * (1 - val_rate - test_rate))
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+
+    for i, (imgfile, maskfile) in tqdm(enumerate(files), total=n_samples):
+        if i < n_train:
+            target = "train"
+        elif i >= n_train and i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        img = nib.load(imgfile).get_fdata()
+        img = np.array(img)
+        img = (img - img.min()) / (img.max() - img.min()) * 255
+        img = img.astype(np.uint8)
+        mask = nib.load(maskfile).get_fdata()
+        mask = np.array(mask)
+        mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+        mask = mask.astype(np.uint8)
+
+        assert img.shape == mask.shape
+
+        for slice in range(img.shape[2]):
+            img_slice = img[:, :, slice]
+            mask_slice = mask[:, :, slice]
+            img_slice = Image.fromarray(img_slice)
+            mask_slice = Image.fromarray(mask_slice)
+
+            img_slice = reformat(img_slice)
+            mask_slice = reformat(mask_slice)
+
+            img_id = uuid.uuid4().hex
+            img_slice.save(f"data/preprocessed/covid/{target}/{img_id}.png")
+            mask_slice.save(f"data/preprocessed/covid/{target}/masks/{img_id}.png")
+
+
 def preprocess(dataset, val_rate, test_rate):
     clear_data(dataset)
 
@@ -387,6 +435,8 @@ def preprocess(dataset, val_rate, test_rate):
         process_brain_data(val_rate, test_rate)
     elif dataset == "prostate":
         process_prostate_data(val_rate, test_rate)
+    elif dataset == "covid":
+        preprocess_covid_data(val_rate, test_rate)
     else:
         raise ValueError("Invalid dataset")
 
