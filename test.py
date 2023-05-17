@@ -18,7 +18,11 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def test_model(model, configuration, dataset_name, state, device="cuda"):
+def test_model(config_name, dataset_name, device="cuda"):
+    config = load_config(config_name)
+    nlabels = ALL_DATASETS[dataset_name]["n_labels"]
+    model = UNet(config, n_labels=nlabels).to(device)
+
     model.eval()
     trf = model.center_trf()
 
@@ -26,16 +30,15 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
     dataloader_test = DataLoader(dataset_test, shuffle=True)
 
     labels = ALL_DATASETS[dataset_name]["labels"]
-    n_labels = ALL_DATASETS[dataset_name]["n_labels"]
-
     results = dict()
 
     for li, label in enumerate(labels):
+        model = UNet(config, n_labels=nlabels).to(device)
 
         bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
 
         # before_raining erf rate
-        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration} (BT)", total=len(dataloader_test)):
+        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name} (BT)", total=len(dataloader_test)):
             y = y[:, li, :, :]
             y /= 255
             x.requires_grad = True
@@ -47,6 +50,7 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
             d = torch.autograd.grad(out_center, x)[0]
             d = torch.abs(d)
             d = (d - d.min()) / (d.max() - d.min())
+            d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
             erf = d.detach().cpu().numpy()
             erf = np.squeeze(erf)
             bt_erf_dist[:, :, i] = erf
@@ -54,6 +58,8 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
         bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
 
         # metrics after training
+        
+        state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
         model.load_state_dict(state)
 
         erf_dist = np.zeros((576, 576, len(dataloader_test)))
@@ -88,28 +94,29 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
             out = (out >= 0.5).astype(int)
             out = np.squeeze(out)
 
-            # dice score
-            dicescore = dice_score(out, np.squeeze(y.numpy()))
-            dice_scores.append(dicescore)
+            if y.sum() != 0:
+                # dice score
+                dicescore = dice_score(out, np.squeeze(y.numpy()))
+                dice_scores.append(dicescore)
 
-            # object rate
-            obectrate = object_rate(trf, np.squeeze(y.numpy()))
-            object_rates.append(obectrate)
+                # object rate
+                obectrate = object_rate(trf, np.squeeze(y.numpy()))
+                object_rates.append(obectrate)
 
-            # accuracy
-            acc = accuracy(out, np.squeeze(y.numpy()))
-            accuracies.append(acc)
+                # accuracy
+                acc = accuracy(out, np.squeeze(y.numpy()))
+                accuracies.append(acc)
 
-            # sensitivity
-            sens = sensitivity(out, np.squeeze(y.numpy()))
-            sensitivities.append(sens)
+                # sensitivity
+                sens = sensitivity(out, np.squeeze(y.numpy()))
+                sensitivities.append(sens)
 
-            # specificity
-            spec = specificity(out, np.squeeze(y.numpy()))
-            specificities.append(spec)
+                # specificity
+                spec = specificity(out, np.squeeze(y.numpy()))
+                specificities.append(spec)
 
-            jaccard = jaccard_index(out, np.squeeze(y.numpy()))
-            jaccard_scores.append(jaccard)
+                jaccard = jaccard_index(out, np.squeeze(y.numpy()))
+                jaccard_scores.append(jaccard)
 
 
         # ERF rate
@@ -124,7 +131,7 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
         jacc = np.mean(jaccard_scores)
 
         # training time from json file
-        with open(f"out/{dataset_name}/{configuration}/result.json", "r") as json_file:
+        with open(f"out/{dataset_name}/{config_name}/result.json", "r") as json_file:
             data = json.load(json_file)
             training_time = data["training_time"]
 
@@ -171,11 +178,7 @@ def main(all, dataset):
         dataset_results = {label: pd.DataFrame(columns=configurations) for label in ALL_DATASETS[dataset_name]["labels"]}
         for config_name in configurations:
             try:
-                config = load_config(config_name)
-                nlabels = ALL_DATASETS[dataset_name]["n_labels"]
-                model = UNet(config, n_labels=nlabels).to(device)
-                state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
-                result = test_model(model, config_name, dataset_name, state, device)
+                result = test_model(config_name, dataset_name, device)
                 for label in result:
                     dataset_results[label][config_name] = pd.Series(result[label])
             except FileNotFoundError:

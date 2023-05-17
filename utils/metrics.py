@@ -10,7 +10,11 @@ from scipy import signal
 
 def dice_score(arr1, arr2):
     intersection = np.sum(np.logical_and(arr1, arr2))
+    # intersection = np.nan_to_num(intersection)
     union = np.sum(np.logical_or(arr1, arr2))
+    # union = np.nan_to_num(union)
+    if union + intersection == 0:
+        return 0
     dice_score = (2.0 * intersection) / (union + intersection)
     return dice_score
 
@@ -173,20 +177,26 @@ def object_rate(center_trf, mask):
 
 
 def jaccard_index(im1, im2):
-    im1 = im1.astype(np.bool)
-    im2 = im2.astype(np.bool)
+    im1 = im1.astype(bool)
+    im2 = im2.astype(bool)
 
     assert im1.shape == im2.shape
 
     intersection = np.logical_and(im1, im2)
     union = np.logical_or(im1, im2)
+    if union.sum() == 0:
+        return 0
     return intersection.sum() / float(union.sum())
 
 
 def specificity(im1, im2):
-    im1 = im1.flatten().astype(np.bool)
-    im2 = im2.flatten().astype(np.bool)
+    im1 = im1.flatten().astype(bool)
+    im2 = im2.flatten().astype(bool)
     cm = confusion_matrix(im1,im2)
+
+    if cm.shape == (1,1):
+        return 1
+
     tn = cm[0,0]
     fp = cm[0,1]
     if tn == 0:
@@ -196,9 +206,13 @@ def specificity(im1, im2):
 
 
 def sensitivity(im1, im2):
-    im1 = im1.flatten().astype(np.bool)
-    im2 = im2.flatten().astype(np.bool)
+    im1 = im1.flatten().astype(bool)
+    im2 = im2.flatten().astype(bool)
     cm = confusion_matrix(im1,im2)
+
+    if cm.shape == (1,1):
+        return 0
+
     tp = cm[1,1]
     fn = cm[1,0]
     if tp == 0:

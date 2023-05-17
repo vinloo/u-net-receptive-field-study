@@ -21,7 +21,9 @@ class SegmentationDataset(Dataset):
             self.masks = glob.glob(f"data/preprocessed/{name}/{subset}/masks/*.png")
         else:
             self.inputs = glob.glob(f"data/preprocessed/{name}/{subset}/*.png")
+            self.inputs.sort()
             masks = glob.glob(f"data/preprocessed/{name}/{subset}/masks/**/*.png")
+            masks.sort()
             self.masks = []
             for i in range(len(masks) // self.n_labels):
                 self.masks.append(tuple(masks[i * self.n_labels: (i + 1) * self.n_labels]))
