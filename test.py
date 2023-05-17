@@ -172,7 +172,8 @@ def main(all, dataset):
         for config_name in configurations:
             try:
                 config = load_config(config_name)
-                model = UNet(config).to(device)
+                nlabels = ALL_DATASETS[dataset_name]["n_labels"]
+                model = UNet(config, n_labels=nlabels).to(device)
                 state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
                 result = test_model(model, config_name, dataset_name, state, device)
                 for label in result:
