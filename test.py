@@ -25,110 +25,122 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
     dataset_test = SegmentationDataset(dataset_name, "test")
     dataloader_test = DataLoader(dataset_test, shuffle=True)
 
-    bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
+    labels = ALL_DATASETS[dataset_name]["labels"]
+    n_labels = ALL_DATASETS[dataset_name]["n_labels"]
 
-    # before_raining erf rate
-    for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration} (BT)", total=len(dataloader_test)):
-        y /= 255
-        x.requires_grad = True
-        x = x.to(device)
-        out = model(x)
-        
+    results = dict()
+
+    for li, label in enumerate(labels):
+
+        bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
+
+        # before_raining erf rate
+        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration} (BT)", total=len(dataloader_test)):
+            y = y[:, li, :, :]
+            y /= 255
+            x.requires_grad = True
+            x = x.to(device)
+            out = model(x)
+            
+            # ERF rate
+            out_center = out[:, li, 288, 288]
+            d = torch.autograd.grad(out_center, x)[0]
+            d = torch.abs(d)
+            d = (d - d.min()) / (d.max() - d.min())
+            erf = d.detach().cpu().numpy()
+            erf = np.squeeze(erf)
+            bt_erf_dist[:, :, i] = erf
+
+        bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
+
+        # metrics after training
+        model.load_state_dict(state)
+
+        erf_dist = np.zeros((576, 576, len(dataloader_test)))
+        dice_scores = []
+        object_rates = []
+        accuracies = []
+        sensitivities = []
+        specificities = []
+        jaccard_scores = []
+
+        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration}", total=len(dataloader_test)):
+            y = y[:, li, :, :]
+            y /= 255
+            x.requires_grad = True
+            x = x.to(device)
+            out = model(x)
+            
+            # ERF rate
+            out_center = out[:, li, 288, 288]
+            d = torch.autograd.grad(out_center, x)[0]
+            d = torch.abs(d)
+            d = (d - d.min()) / (d.max() - d.min())
+            d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
+            erf = d.detach().cpu().numpy()
+            erf = np.squeeze(erf)
+            erf_dist[:, :, i] = erf
+
+            # classification metrics
+            out = out[:, li, :, :]
+            out = torch.sigmoid(out)
+            out = out.detach().cpu().numpy()
+            out = (out >= 0.5).astype(int)
+            out = np.squeeze(out)
+
+            # dice score
+            dicescore = dice_score(out, np.squeeze(y.numpy()))
+            dice_scores.append(dicescore)
+
+            # object rate
+            obectrate = object_rate(trf, np.squeeze(y.numpy()))
+            object_rates.append(obectrate)
+
+            # accuracy
+            acc = accuracy(out, np.squeeze(y.numpy()))
+            accuracies.append(acc)
+
+            # sensitivity
+            sens = sensitivity(out, np.squeeze(y.numpy()))
+            sensitivities.append(sens)
+
+            # specificity
+            spec = specificity(out, np.squeeze(y.numpy()))
+            specificities.append(spec)
+
+            jaccard = jaccard_index(out, np.squeeze(y.numpy()))
+            jaccard_scores.append(jaccard)
+
+
         # ERF rate
-        out_center = out[:, :, 288, 288]
-        d = torch.autograd.grad(out_center, x)[0]
-        d = torch.abs(d)
-        d = (d - d.min()) / (d.max() - d.min())
-        erf = d.detach().cpu().numpy()
-        erf = np.squeeze(erf)
-        bt_erf_dist[:, :, i] = erf
-
-    bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
-
-    # metrics after training
-    model.load_state_dict(state)
-
-    erf_dist = np.zeros((576, 576, len(dataloader_test)))
-    dice_scores = []
-    object_rates = []
-    accuracies = []
-    sensitivities = []
-    specificities = []
-    jaccard_scores = []
-
-    for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration}", total=len(dataloader_test)):
-        y /= 255
-        x.requires_grad = True
-        x = x.to(device)
-        out = model(x)
-        
-        # ERF rate
-        out_center = out[:, :, 288, 288]
-        d = torch.autograd.grad(out_center, x)[0]
-        d = torch.abs(d)
-        d = (d - d.min()) / (d.max() - d.min())
-        d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
-        erf = d.detach().cpu().numpy()
-        erf = np.squeeze(erf)
-        erf_dist[:, :, i] = erf
+        erf_rate = erf_rate_from_dist(erf_dist, trf)
 
         # classification metrics
-        out = torch.sigmoid(out)
-        out = out.detach().cpu().numpy()
-        out = (out >= 0.5).astype(int)
-        out = np.squeeze(out)
+        dsc = np.mean(dice_scores)
+        obj_rate = np.mean(object_rates)
+        acc = np.mean(accuracies)
+        sens = np.mean(sensitivities)
+        spec = np.mean(specificities)
+        jacc = np.mean(jaccard_scores)
 
-        # dice score
-        dicescore = dice_score(out, np.squeeze(y.numpy()))
-        dice_scores.append(dicescore)
+        # training time from json file
+        with open(f"out/{dataset_name}/{configuration}/result.json", "r") as json_file:
+            data = json.load(json_file)
+            training_time = data["training_time"]
 
-        # object rate
-        obectrate = object_rate(trf, np.squeeze(y.numpy()))
-        object_rates.append(obectrate)
-
-        # accuracy
-        acc = accuracy(out, np.squeeze(y.numpy()))
-        accuracies.append(acc)
-
-        # sensitivity
-        sens = sensitivity(out, np.squeeze(y.numpy()))
-        sensitivities.append(sens)
-
-        # specificity
-        spec = specificity(out, np.squeeze(y.numpy()))
-        specificities.append(spec)
-
-        jaccard = jaccard_index(out, np.squeeze(y.numpy()))
-        jaccard_scores.append(jaccard)
-
-
-    # ERF rate
-    erf_rate = erf_rate_from_dist(erf_dist, trf)
-
-    # classification metrics
-    dsc = np.mean(dice_scores)
-    obj_rate = np.mean(object_rates)
-    acc = np.mean(accuracies)
-    sens = np.mean(sensitivities)
-    spec = np.mean(specificities)
-    jacc = np.mean(jaccard_scores)
-
-    # training time from json file
-    with open(f"out/{dataset_name}/{configuration}/result.json", "r") as json_file:
-        data = json.load(json_file)
-        training_time = data["training_time"]
-
-    return {
-        "training_time": training_time,
-        "erf_rate_before_training": bt_erf_rate,
-        "erf_rate": erf_rate,
-        "dice_score": dsc,
-        "object_rate": obj_rate,
-        "accuracy": acc,
-        "sensitivity": sens,
-        "specificity": spec,
-        "jaccard_score": jacc
-    }
+        results[label] = {
+            "training_time": training_time,
+            "erf_rate_before_training": bt_erf_rate,
+            "erf_rate": erf_rate,
+            "dice_score": dsc,
+            "object_rate": obj_rate,
+            "accuracy": acc,
+            "sensitivity": sens,
+            "specificity": spec,
+            "jaccard_score": jacc
+        }
+    
+    return results
 
 
 def main(all, dataset):
@@ -152,29 +164,40 @@ def main(all, dataset):
     else:
         datasets = [dataset]
 
+    final_keys = []
 
     for dataset_name in datasets:
-        dataset_results = pd.DataFrame(columns=configurations)
+        skip = False
+        dataset_results = {label: pd.DataFrame(columns=configurations) for label in ALL_DATASETS[dataset_name]["labels"]}
         for config_name in configurations:
             try:
                 config = load_config(config_name)
                 model = UNet(config).to(device)
                 state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
                 result = test_model(model, config_name, dataset_name, state, device)
-                dataset_results[config_name] = pd.Series(result)
+                for label in result:
+                    dataset_results[label][config_name] = pd.Series(result[label])
             except FileNotFoundError:
                 print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
-        results.append(dataset_results.copy())
+                skip = True
+                break
+        
+        if not skip:
+            for label in dataset_results:
+                final_keys.append(f"{dataset_name}: {label}")
+                results.append(dataset_results[label].copy())
 
     
     ct = datetime.datetime.now()
     ct = ct.strftime("%Y-%m-%d_%H-%M-%S")
 
-    results = pd.concat(results, axis=0, keys=datasets)
+    print(results, final_keys)
+
+    results = pd.concat(results, axis=0, keys=final_keys)
+
     filename = f"out/test_results_{dataset}_{ct}.csv"
     print(f"Saving results to {filename}")
-    results.to_csv(filename, index=False)
-
+    results.to_csv(filename)
 
 
 if __name__ == "__main__":
