@@ -144,6 +144,9 @@ def object_rate(center_trf, mask):
     cols = mask.any(axis=0)
     rows = mask.any(axis=1)
 
+    if not cols.any() or not rows.any():
+        return 0.0
+
     for i, v in enumerate(cols):
         if v:
             start_col = i
