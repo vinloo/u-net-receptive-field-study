@@ -4,6 +4,8 @@ import glob
 import os
 import pandas as pd
 import json
+import argparse
+import datetime
 from tqdm import tqdm
 from unet import UNet
 from torch.utils.data import DataLoader
@@ -129,7 +131,11 @@ def test_model(model, configuration, dataset_name, state, device="cuda"):
     }
 
 
-if __name__ == "__main__":
+def main(all, dataset):
+    if dataset is None:
+        assert all
+        dataset = "all"
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
@@ -141,7 +147,13 @@ if __name__ == "__main__":
 
     results = []
 
-    for dataset_name in ALL_DATASETS:
+    if all:
+        datasets = ALL_DATASETS.keys()
+    else:
+        datasets = [dataset]
+
+
+    for dataset_name in datasets:
         dataset_results = pd.DataFrame(columns=configurations)
         for config_name in configurations:
             try:
@@ -154,7 +166,21 @@ if __name__ == "__main__":
                 print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
         results.append(dataset_results.copy())
 
-    results = pd.concat(results, axis=0, keys=ALL_DATASETS)
-    print(results)
-    print("\nSaving results to results.csv...")
-    results.to_csv("out/results.csv")
+    
+    ct = datetime.datetime.now()
+    ct = ct.strftime("%Y-%m-%d_%H-%M-%S")
+
+    results = pd.concat(results, axis=0, keys=datasets)
+    filename = f"out/test_results_{dataset}_{ct}.csv"
+    print(f"Saving results to {filename}")
+    results.to_csv(filename, index=False)
+
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys())
+    group.add_argument("-a", "--all", action="store_true", help="preprocess all datasets")
+    args = parser.parse_args()
+    main(args.all, args.dataset)
