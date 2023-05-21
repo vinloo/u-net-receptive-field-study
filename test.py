@@ -70,7 +70,13 @@ def test_model(config_name, dataset_name, device="cuda"):
         specificities = []
         jaccard_scores = []
 
-        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{configuration}", total=len(dataloader_test)):
+        # training time from json file
+        with open(f"out/{dataset_name}/{config_name}/result.json", "r") as json_file:
+            data = json.load(json_file)
+            training_time = data["training_time"]
+            thresholds = data["best_thresholds"]
+
+        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name}", total=len(dataloader_test)):
             y = y[:, li, :, :]
             y /= 255
             x.requires_grad = True
@@ -87,11 +93,13 @@ def test_model(config_name, dataset_name, device="cuda"):
             erf = np.squeeze(erf)
             erf_dist[:, :, i] = erf
 
+            decision_threshold = thresholds[li]
+
             # classification metrics
             out = out[:, li, :, :]
             out = torch.sigmoid(out)
             out = out.detach().cpu().numpy()
-            out = (out >= 0.5).astype(int)
+            out = (out >= decision_threshold).astype(int)
             out = np.squeeze(out)
 
             if y.sum() != 0:
@@ -129,11 +137,6 @@ def test_model(config_name, dataset_name, device="cuda"):
         sens = np.mean(sensitivities)
         spec = np.mean(specificities)
         jacc = np.mean(jaccard_scores)
-
-        # training time from json file
-        with open(f"out/{dataset_name}/{config_name}/result.json", "r") as json_file:
-            data = json.load(json_file)
-            training_time = data["training_time"]
 
         results[label] = {
             "training_time": training_time,
@@ -194,8 +197,6 @@ def main(all, dataset):
     
     ct = datetime.datetime.now()
     ct = ct.strftime("%Y-%m-%d_%H-%M-%S")
-
-    print(results, final_keys)
 
     results = pd.concat(results, axis=0, keys=final_keys)
 
