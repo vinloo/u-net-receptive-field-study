@@ -84,6 +84,11 @@ ALL_DATASETS = {
         "n_labels": 1,
         "modality": Modality.CT,
     },
+    "covid_2": {
+        "labels": ["infection"],
+        "n_labels": 1,
+        "modality": Modality.CT,
+    },
     "pancreas": {
         "labels": ["pancreas"],
         "n_labels": 1,

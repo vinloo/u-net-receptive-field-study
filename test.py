@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def test_model(config_name, dataset_name, device="cuda"):
+def test_model(config_name, dataset_name, device="cuda", no_progress=False):
     config = load_config(config_name)
     nlabels = ALL_DATASETS[dataset_name]["n_labels"]
     model = UNet(config, n_labels=nlabels).to(device)
@@ -38,7 +38,7 @@ def test_model(config_name, dataset_name, device="cuda"):
         bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
 
         # before_raining erf rate
-        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name} (BT)", total=len(dataloader_test)):
+        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name} (BT)", total=len(dataloader_test), disable=no_progress):
             y = y[:, li, :, :]
             y /= 255
             x.requires_grad = True
@@ -76,7 +76,7 @@ def test_model(config_name, dataset_name, device="cuda"):
             training_time = data["training_time"]
             thresholds = data["best_thresholds"]
 
-        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name}", total=len(dataloader_test)):
+        for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name}", total=len(dataloader_test), disable=no_progress):
             y = y[:, li, :, :]
             y /= 255
             x.requires_grad = True
@@ -99,6 +99,7 @@ def test_model(config_name, dataset_name, device="cuda"):
             out = out[:, li, :, :]
             out = torch.sigmoid(out)
             out = out.detach().cpu().numpy()
+            # out = (out >= 0.5).astype(int)
             out = (out >= decision_threshold).astype(int)
             out = np.squeeze(out)
 
@@ -153,7 +154,7 @@ def test_model(config_name, dataset_name, device="cuda"):
     return results
 
 
-def main(all, dataset):
+def main(all, dataset, no_progress=False):
     if dataset is None:
         assert all
         dataset = "all"
@@ -181,13 +182,13 @@ def main(all, dataset):
         dataset_results = {label: pd.DataFrame(columns=configurations) for label in ALL_DATASETS[dataset_name]["labels"]}
         for config_name in configurations:
             try:
-                result = test_model(config_name, dataset_name, device)
+                result = test_model(config_name, dataset_name, device, no_progress=no_progress)
                 for label in result:
                     dataset_results[label][config_name] = pd.Series(result[label])
             except FileNotFoundError:
                 print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
                 skip = True
-                break
+                continue
         
         if not skip:
             for label in dataset_results:
@@ -210,5 +211,6 @@ if __name__ == "__main__":
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys())
     group.add_argument("-a", "--all", action="store_true", help="preprocess all datasets")
+    parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
     args = parser.parse_args()
-    main(args.all, args.dataset)
+    main(args.all, args.dataset, args.no_progress)

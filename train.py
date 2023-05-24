@@ -59,7 +59,8 @@ class Trainer:
         validation_dataloader: Optional[Dataset] = None,
         epochs: int = 100,
         epoch: int = 0,
-        scheduler = None
+        scheduler = None,
+        no_progressbar: bool = False
     ):
         self.model = model
         self.criterion = criterion
@@ -76,6 +77,7 @@ class Trainer:
         self.learning_rate = []
         # self.erf_rates = []
         self.scheduler = scheduler
+        self.no_progressbar = no_progressbar
 
     def run_trainer(self, dataset_name, config_name, out_dir):
         out_path = get_output_path(dataset_name, config_name, out_dir)
@@ -110,6 +112,7 @@ class Trainer:
             "Training",
             total=len(self.training_dataloader),
             leave=False,
+            disable=self.no_progressbar,
         )
 
         for _, (x, y) in batch_iter:
@@ -145,6 +148,7 @@ class Trainer:
             "Validation",
             total=len(self.validation_dataloader),
             leave=False,
+            disable=self.no_progressbar,
         )
 
         for _, (x, y) in batch_iter:
@@ -164,7 +168,7 @@ class Trainer:
         batch_iter.close()
 
 
-def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, seed=42, out_dir="out"):
+def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, seed=42, out_dir="out", no_progress=False):
     torch.manual_seed(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -188,7 +192,8 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         training_dataloader=dataloader_train,
         validation_dataloader=dataloader_val,
         epochs=n_epochs,
-        scheduler=scheduler
+        scheduler=scheduler,
+        no_progressbar=no_progress
     )
 
     get_output_path(dataset_name, config_name, out_dir, clear_existing=True)
@@ -233,11 +238,12 @@ def main():
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
     parser.add_argument("-l", "--learning_rate", type=float, default=0.01, help="learning rate")
     parser.add_argument("-o", "--output_dir", type=str, default="out", help="output folder")
+    parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
     args = parser.parse_args()
 
     config = load_config(args.config)
    
-    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed, out_dir=args.output_dir)
+    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed, out_dir=args.output_dir, no_progress=args.no_progress)
     
 
 if __name__ == "__main__":

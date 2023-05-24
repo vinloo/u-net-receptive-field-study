@@ -420,6 +420,80 @@ def preprocess_covid_data(val_rate, test_rate):
             mask_slice.save(f"data/preprocessed/covid/{target}/masks/{img_id}.png")
 
 
+def preprocess_covid_data_2(val_rate, test_rate):
+    img_files = glob.glob("data/raw/covid_ct_2/part2/rp_im/*.nii.gz")
+    img_files.sort(key=lambda x: (len(x), x))
+    lmask_files = glob.glob("data/raw/covid_ct_2/part2/rp_lung_msk/*.nii.gz")
+    lmask_files.sort(key=lambda x: (len(x), x))
+    mask_files = glob.glob("data/raw/covid_ct_2/part2/rp_msk/*.nii.gz")
+    mask_files.sort(key=lambda x: (len(x), x))
+
+    n_samples = len(img_files)
+
+    for i, (img_file, lmask_file, mask_file) in tqdm(enumerate(zip(img_files, lmask_files, mask_files)), total=n_samples):
+
+        # Usable slices per volume:
+        # i=0: 42
+        # i=1: 14
+        # i=2: 127
+        # i=3: 25
+        # i=4: 45
+        # i=5: 1
+        # i=6: 9
+        # i=7: 36
+        # i=8: 73
+        if i == 0 or i == 1:
+            target = "val"
+        elif i == 4 or i == 6:
+            target = "test"
+        else:
+            target = "train"
+
+        imgs = nib.load(img_file).get_fdata()
+        imgs = np.array(imgs)
+
+        lmasks = nib.load(lmask_file).get_fdata()
+        lmasks = np.array(lmasks)
+
+        masks = nib.load(mask_file).get_fdata()
+        masks = np.array(masks)
+
+        assert masks.shape == lmasks.shape == imgs.shape
+
+        for slice in range(imgs.shape[2]): 
+            img = imgs[:,:,slice]
+            lmask = lmasks[:,:,slice]
+            mask = masks[:,:,slice]
+
+            if mask.sum() == 0 or lmask.sum() == 0:
+                continue
+
+            img = (img - img.min()) / (img.max() - img.min()) * 255
+            img = img.astype(np.uint8)
+            img = Image.fromarray(img)
+            img = reformat(img)
+            img = np.array(img)
+            
+            lmask = (lmask - lmask.min()) / (lmask.max() - lmask.min())
+            lmask = lmask.astype(np.uint8)
+            lmask[lmask > 0] = 1
+            lmask = Image.fromarray(lmask)
+            lmask = reformat(lmask)
+            lmask = np.array(lmask)
+
+            img = Image.fromarray(img * lmask)
+            
+            mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+            mask = mask.astype(np.uint8)
+            mask[mask > 0] = 255
+            mask = Image.fromarray(mask)
+            mask = reformat(mask)
+            
+            img_id = uuid.uuid4().hex
+            img.save(f"data/preprocessed/covid_2/{target}/{img_id}.png")
+            mask.save(f"data/preprocessed/covid_2/{target}/masks/{img_id}.png")
+
+
 def preprocess(dataset, val_rate, test_rate):
     clear_data(dataset)
 
@@ -437,6 +511,8 @@ def preprocess(dataset, val_rate, test_rate):
         process_prostate_data(val_rate, test_rate)
     elif dataset == "covid":
         preprocess_covid_data(val_rate, test_rate)
+    elif dataset == "covid_2":
+        preprocess_covid_data_2(val_rate, test_rate)
     else:
         raise ValueError("Invalid dataset")
 
