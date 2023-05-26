@@ -7,7 +7,7 @@ import argparse
 import shutil
 import json
 from utils.data import SegmentationDataset
-from utils.config import load_config
+from utils.config import load_config, ALL_CONFIGS
 from utils.metrics import dice_score, batch_erf_rate
 from utils.data import ALL_DATASETS
 from torchvision.io import read_image
@@ -75,13 +75,12 @@ class Trainer:
         self.training_loss = []
         self.validation_loss = []
         self.learning_rate = []
-        # self.erf_rates = []
         self.scheduler = scheduler
         self.no_progressbar = no_progressbar
 
     def run_trainer(self, dataset_name, config_name, out_dir):
         out_path = get_output_path(dataset_name, config_name, out_dir)
-        early_stopper = EarlyStopper(patience=20)
+        early_stopper = EarlyStopper(patience=50)
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
             self.epoch += 1
@@ -106,7 +105,6 @@ class Trainer:
     def _train(self):
         self.model.train()
         train_losses = []
-        # erf_rates = []
         batch_iter = tqdm(
             enumerate(self.training_dataloader),
             "Training",
@@ -123,8 +121,6 @@ class Trainer:
             out = self.model(input_x)
             loss = self.criterion(out, target_y)
             loss_value = loss.item()
-            # batch_erf = batch_erf_rate(input_x, out, self.center_trf)
-            # erf_rates.extend(batch_erf)
             train_losses.append(abs(loss_value))
             loss.backward()
             self.optimizer.step()
@@ -136,7 +132,6 @@ class Trainer:
         self.training_loss.append(np.mean(train_losses))
         self.learning_rate.append(self.optimizer.param_groups[0]["lr"])
         self.scheduler.step(np.mean(train_losses))
-        # self.erf_rates.append(np.mean(erf_rates))
 
         batch_iter.close()
 
@@ -168,9 +163,7 @@ class Trainer:
         batch_iter.close()
 
 
-def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, seed=42, out_dir="out", no_progress=False):
-    torch.manual_seed(seed)
-
+def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, out_dir="out", no_progress=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
@@ -206,7 +199,6 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
-    # plt.plot(trainer.erf_rates, label="ERF rate")
     plt.title(f"Loss for {dataset_name}")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
@@ -220,7 +212,6 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         "validation_loss": trainer.validation_loss,
         "learning_rate": trainer.learning_rate,
         "training_time": int(np.argmin(trainer.validation_loss) + 1),
-        # "erf_rate": trainer.erf_rates
     }
 
     # write results to json
@@ -232,18 +223,17 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys(), required=True)
-    parser.add_argument("-s", "--seed", type=int, default=42, help="random seed")
-    parser.add_argument("-c", "--config", type=str, default="default", help="path to config file")
-    parser.add_argument("-e", "--epochs", type=int, default=100, help="number of epochs")
+    parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS, required=True)
+    parser.add_argument("-e", "--epochs", type=int, default=200, help="number of epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
-    parser.add_argument("-l", "--learning_rate", type=float, default=0.01, help="learning rate")
+    parser.add_argument("-l", "--learning_rate", type=float, default=0.0001, help="learning rate")
     parser.add_argument("-o", "--output_dir", type=str, default="out", help="output folder")
     parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
     args = parser.parse_args()
 
     config = load_config(args.config)
    
-    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, seed=args.seed, out_dir=args.output_dir, no_progress=args.no_progress)
+    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, out_dir=args.output_dir, no_progress=args.no_progress)
     
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import datetime
 from tqdm import tqdm
 from unet import UNet
 from torch.utils.data import DataLoader
-from utils.config import load_config
+from utils.config import load_config, ALL_CONFIGS
 from utils.metrics import dice_score, erf_rate_from_dist, object_rate, jaccard_index, specificity, sensitivity, accuracy
 from utils.data import SegmentationDataset
 from utils.data import ALL_DATASETS
@@ -58,7 +58,6 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
         bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
 
         # metrics after training
-        
         state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
         model.load_state_dict(state)
 
@@ -74,7 +73,6 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
         with open(f"out/{dataset_name}/{config_name}/result.json", "r") as json_file:
             data = json.load(json_file)
             training_time = data["training_time"]
-            thresholds = data["best_thresholds"]
 
         for i, (x, y) in tqdm(enumerate(dataloader_test), f"{dataset_name}/{config_name}", total=len(dataloader_test), disable=no_progress):
             y = y[:, li, :, :]
@@ -93,14 +91,11 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
             erf = np.squeeze(erf)
             erf_dist[:, :, i] = erf
 
-            decision_threshold = thresholds[li]
-
             # classification metrics
             out = out[:, li, :, :]
             out = torch.sigmoid(out)
             out = out.detach().cpu().numpy()
-            # out = (out >= 0.5).astype(int)
-            out = (out >= decision_threshold).astype(int)
+            out = (out >= 0.5).astype(int)
             out = np.squeeze(out)
 
             if y.sum() != 0:
@@ -154,19 +149,21 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
     return results
 
 
-def main(all, dataset, no_progress=False):
+def main(all, dataset, config, no_progress=False):
     if dataset is None:
         assert all
         dataset = "all"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
-
-    configurations = os.listdir("configurations")
-    configurations.remove("default.json")
-    configurations = [config[:-5] for config in configurations if config.endswith(".json")]
-    configurations.sort()
-    configurations = sorted(configurations, key=len)
+    
+    if config is None:
+        configurations = os.listdir("configurations")
+        configurations = [config[:-5] for config in configurations if config.endswith(".json")]
+        configurations.sort()
+        configurations = sorted(configurations, key=len)
+    else:
+        configurations = [config]
 
     results = []
 
@@ -210,7 +207,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys())
+    parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS, required=True)
     group.add_argument("-a", "--all", action="store_true", help="preprocess all datasets")
     parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
     args = parser.parse_args()
-    main(args.all, args.dataset, args.no_progress)
+    main(args.all, args.dataset, args.config, args.no_progress)
