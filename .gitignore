@@ -2,9 +2,9 @@ data/raw/*
 !data/raw/.gitkeep
 data/preprocessed/*
 !data/preprocessed/.gitkeep
+out/*
+!out/.gitkeep
 
-backup
-out
 *.pt
 *.zip
 

@@ -2,6 +2,10 @@ import json
 from dotmap import DotMap
 from sys import exit
 
+
+ALL_CONFIGS = ["trf54", "trf100", "trf146", "trf204", "trf230", "trf298", "trf360", "trf412", "trf486", "trf570"]
+
+
 def load_config(config_name):
     try:
         config = json.load(open(f"configurations/{config_name}.json"))

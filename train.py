@@ -1,4 +1,3 @@
-import glob
 import os
 import torch
 import matplotlib.pyplot as plt
@@ -8,7 +7,6 @@ import shutil
 import json
 from utils.data import SegmentationDataset
 from utils.config import load_config, ALL_CONFIGS
-from utils.metrics import dice_score, batch_erf_rate
 from utils.data import ALL_DATASETS
 from torchvision.io import read_image
 from dotmap import DotMap
@@ -16,7 +14,6 @@ from unet import UNet
 from torch.utils.data import DataLoader, Dataset
 from typing import Optional
 from tqdm import tqdm, trange
-from pathlib import Path
 
 
 def get_output_path(dataset_name, config_name, out_dir, clear_existing=False):
@@ -217,7 +214,6 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     # write results to json
     with open(f'{out_path}/result.json', 'w') as f:
         json.dump(results, f)
-
     
 
 def main():
@@ -232,7 +228,6 @@ def main():
     args = parser.parse_args()
 
     config = load_config(args.config)
-   
     train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, out_dir=args.output_dir, no_progress=args.no_progress)
     
 

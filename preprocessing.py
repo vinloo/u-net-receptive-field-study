@@ -8,10 +8,32 @@ import argparse
 import numpy as np
 import nibabel as nib
 import pydicom
+from torchvision import transforms
 from PIL import Image
 from tqdm import tqdm
 from utils.data import ALL_DATASETS
 from matplotlib import pyplot as plt
+
+
+def random_augmentations(img: Image, mask: Image):
+    p_hflip = random.random()
+    p_vflip = random.random()
+    p_rot = random.random()
+
+    if p_hflip > 0.5:
+        img = transforms.functional.hflip(img)
+        mask = transforms.functional.hflip(mask)
+
+    if p_vflip > 0.5:
+        img = transforms.functional.vflip(img)
+        mask = transforms.functional.vflip(mask)
+
+    if p_rot > 0.5:
+        angle = random.choice([90, 180, 270])
+        img = transforms.functional.rotate(img, angle)
+        mask = transforms.functional.rotate(mask, angle)
+
+    return img, mask
 
 
 def reformat(img):
@@ -43,7 +65,6 @@ def process_fetal_head_data(val_rate, test_rate):
     n_val = int(n_samples * val_rate)
 
     sample_ns = list(range(0, n_samples, 2))
-    random.seed("split seed") # to make sure it is split the same way every time
     random.shuffle(sample_ns)
 
     for i in sample_ns:
@@ -77,6 +98,100 @@ def process_fetal_head_data(val_rate, test_rate):
         ann.save(f"data/preprocessed/fetal_head/{target}/masks/{img_id}.png")
 
 
+def preprocess_fetal_head_data_2(val_rate, test_rate, n_augmentations=0):
+    patients = glob.glob("data/raw/fetal_head_2/*")
+    patients = [p.split("/")[-1] for p in patients]
+
+    data = {p: dict() for p in patients}
+
+    print("Collecting data...")
+
+    for p in patients:
+        img_files = glob.glob(f"data/raw/fetal_head_2/{p}/image/*.png")
+        img_files.sort(key=lambda x: (len(x), x))
+        mask_files = glob.glob(f"data/raw/fetal_head_2/{p}/mask_enhance/*.png")
+        mask_files.sort(key=lambda x: (len(x), x))
+        
+        pairs = list(zip(img_files, mask_files))
+        data[p]["pairs_mask"] = []
+        data[p]["pairs_no_mask"] = []
+        data[p]["n_total"] = len(pairs)
+        data[p]["n_mask"] = 0
+        data[p]["n_no_mask"] = 0
+        for img_file, mask_file in pairs:
+            assert img_file[:-4] == mask_file[:-9].replace("mask_enhance", "image")
+
+            mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
+            if np.sum(mask) > 0:
+                data[p]["n_mask"] += 1
+                data[p]["pairs_mask"].append((img_file, mask_file))
+            else:
+                data[p]["n_no_mask"] += 1
+                data[p]["pairs_no_mask"].append((img_file, mask_file))
+
+    n_samples = 0
+    for p in patients:
+        n_samples += data[p]["n_total"]
+
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+    n_train = n_samples - n_val - n_test
+
+    assert n_samples == n_val + n_test + n_train
+
+    data = dict(sorted(data.items(), key=lambda x: x[1]["n_total"], reverse=True))
+
+    train_size = 0
+    train_patients = []
+    val_size = 0
+    val_patients = []
+    test_size = 0
+    test_patients = []
+
+    for p in data:
+        if train_size < n_train:
+            train_size += data[p]["n_total"]
+            train_patients.append(p)
+        elif val_size < n_val:
+            val_size += data[p]["n_total"]
+            val_patients.append(p)
+        elif test_size < n_test:
+            test_size += data[p]["n_total"]
+            test_patients.append(p)
+
+    for patients, target in [(train_patients, "train"), (val_patients, "val"), (test_patients, "test")]:
+        print("Processing", target)
+        for p in tqdm(patients, total=len(patients)):
+            pairs = data[p]["pairs_mask"] + data[p]["pairs_no_mask"]
+            
+            for img_file, mask_file in pairs:
+                img = cv2.imread(img_file, cv2.IMREAD_GRAYSCALE)
+                if img.sum() != 0:
+                    img = (img - img.min()) / (img.max() - img.min()) * 255
+                img = img.astype(np.uint8)
+                img = Image.fromarray(img)
+                img = reformat(img)
+
+                mask = cv2.imread(mask_file, cv2.IMREAD_GRAYSCALE)
+                if mask.sum() != 0:
+                    mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+                mask = mask.astype(np.uint8)
+                mask = mask == 255 # filter out SP mask
+                mask = Image.fromarray(mask)
+                mask = reformat(mask)
+                mask = mask.convert("L")
+
+                img_id = uuid.uuid4().hex
+                img.save(f"data/preprocessed/fetal_head_2/{target}/{img_id}.png")
+                mask.save(f"data/preprocessed/fetal_head_2/{target}/masks/{img_id}.png")
+
+                for _ in range(n_augmentations):
+                    img_id = uuid.uuid4().hex
+                    img_aug, mask_aug = random_augmentations(img, mask)
+                    img_aug.save(f"data/preprocessed/fetal_head_2/{target}/{img_id}.png")
+                    mask_aug.save(f"data/preprocessed/fetal_head_2/{target}/masks/{img_id}.png")
+
+
 def process_breast_cancer_data(val_rate, test_rate):
     files = glob.glob("data/raw/breast_cancer/Dataset_BUSI_with_GT/*/*")
     files.sort()
@@ -90,7 +205,6 @@ def process_breast_cancer_data(val_rate, test_rate):
     n_val = int(n_samples * val_rate)
 
     sample_ns = list(range(0, n_samples, 2))
-    random.seed("split seed") # to make sure it is split the same way every time
     random.shuffle(sample_ns)
     
     for i in sample_ns:
@@ -420,7 +534,7 @@ def preprocess_covid_data(val_rate, test_rate):
             mask_slice.save(f"data/preprocessed/covid/{target}/masks/{img_id}.png")
 
 
-def preprocess_covid_data_2(val_rate, test_rate):
+def preprocess_covid_data_2(val_rate, test_rate, n_augmentations=0):
     img_files = glob.glob("data/raw/covid_ct_2/part2/rp_im/*.nii.gz")
     img_files.sort(key=lambda x: (len(x), x))
     lmask_files = glob.glob("data/raw/covid_ct_2/part2/rp_lung_msk/*.nii.gz")
@@ -493,12 +607,20 @@ def preprocess_covid_data_2(val_rate, test_rate):
             img.save(f"data/preprocessed/covid_2/{target}/{img_id}.png")
             mask.save(f"data/preprocessed/covid_2/{target}/masks/{img_id}.png")
 
+            for i in range(n_augmentations):
+                img_id = uuid.uuid4().hex
+                img_aug, mask_aug = random_augmentations(img, mask)
+                img_aug.save(f"data/preprocessed/covid_2/{target}/{img_id}.png")
+                mask_aug.save(f"data/preprocessed/covid_2/{target}/masks/{img_id}.png")
+
 
 def preprocess(dataset, val_rate, test_rate):
     clear_data(dataset)
 
     if dataset == "fetal_head":
         process_fetal_head_data(val_rate, test_rate)
+    elif dataset == "fetal_head_2":
+        preprocess_fetal_head_data_2(val_rate, test_rate, 4)
     elif dataset == "breast_cancer":
         process_breast_cancer_data(val_rate, test_rate)
     elif dataset == "mouse_embryo":
@@ -512,7 +634,7 @@ def preprocess(dataset, val_rate, test_rate):
     elif dataset == "covid":
         preprocess_covid_data(val_rate, test_rate)
     elif dataset == "covid_2":
-        preprocess_covid_data_2(val_rate, test_rate)
+        preprocess_covid_data_2(val_rate, test_rate, 2)
     else:
         raise ValueError("Invalid dataset")
 

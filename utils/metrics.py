@@ -10,9 +10,7 @@ from scipy import signal
 
 def dice_score(arr1, arr2):
     intersection = np.sum(np.logical_and(arr1, arr2))
-    # intersection = np.nan_to_num(intersection)
     union = np.sum(np.logical_or(arr1, arr2))
-    # union = np.nan_to_num(union)
     if union + intersection == 0:
         return 0
     dice_score = (2.0 * intersection) / (union + intersection)
@@ -38,104 +36,6 @@ def erf_rate_from_dist(erf_dist, trf):
             threshold = bin_centers[i]
             erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
             return erf_rate
-
-
-def batch_erf_rate(batch_in, out, trf):
-    """Compute the ERF rate for a batch of images, to be used by trainer"""
-    erf_rates = []
-    for i in range(batch_in.shape[0]):
-        out_center = out[i, 0, 288, 288]
-        d = torch.autograd.grad(out_center, batch_in, retain_graph=True)[0]
-        img = d[i, :, :, :]
-        img = torch.abs(img)
-        img = (img - img.min()) / (img.max() - img.min())
-        img = torch.nan_to_num(img) # if all pixels are predicted 0, then img will be nan
-
-        img = torch.squeeze(img)
-
-        start = trf[0, 0], trf[0, 1]
-        len_x = trf[1, 0] - trf[0, 0] + 1
-        len_y = trf[1, 1] - trf[0, 1] + 1
-
-        rf_zone = img[start[0]:start[0] + len_y, start[1]:start[1]+len_x].detach().cpu().numpy()
-
-        data = rf_zone.ravel()
-
-        kde = sns.histplot(data, kde=True, bins=100).get_lines()[0].get_data()
-        
-        # first try to find first trough of the KDE (if bimodally distributed)
-        peaks = signal.find_peaks(-kde[1])[0]                                 
-        if len(peaks) > 0:
-            peak = peaks[0]
-        else:
-            # find first low point after first peak
-            for i, bin in enumerate(kde[1]):
-                if i < 10 or i > len(kde[1]) - 5:
-                    continue
-                elif bin < np.mean(kde[1][i-10:i+5]):
-                    peak = i
-                    break
-
-        threshold = kde[0][peak]
-        erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
-        erf_rates.append(erf_rate.item())
-
-    return erf_rates
-
-
-def erf_rate_dataset(model, dataset_name, device="cuda"):
-    """Compute the ERF rate based on an entire dataset for a given model"""
-    trf = model.center_trf()
-    inputs = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/*", "*.png"))
-    masks = glob.glob(os.path.join(f"data/preprocessed/{dataset_name}/*/masks", "*.png"))
-    dataset_test = SegmentationDataset(inputs, masks)
-    dataloader_test = DataLoader(dataset_test, shuffle=True)
-
-    dist = np.zeros((576, 576, len(dataloader_test)))
-
-    for i, (x, _) in enumerate(dataloader_test):
-        x.requires_grad = True
-        x = x.to(device)
-        out = model(x)
-        out_center = out[:, 0, 288, 288]
-
-        d = torch.autograd.grad(out_center, x)[0]
-        d = torch.abs(d)
-        d = (d - d.min()) / (d.max() - d.min())
-        d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
-
-        img = d.detach().cpu().numpy()
-        img = np.squeeze(img)
-
-        dist[:, :, i] = img
-    
-    img = np.mean(dist, axis=2)
-
-    start = trf[0, 0], trf[0, 1]
-    len_x = trf[1, 0] - trf[0, 0] + 1
-    len_y = trf[1, 1] - trf[0, 1] + 1
-
-    rf_zone = img[start[0]:start[0] + len_y, start[1]:start[1]+len_x]
-
-    data = rf_zone.ravel()
-    kde = sns.histplot(data, kde=True, bins=100).get_lines()[0].get_data()
-        
-    # first try to find first trough of the KDE (if bimodally distributed)
-    peaks = signal.find_peaks(-kde[1])[0]                                 
-    if len(peaks) > 0:
-        peak = peaks[0]
-    else:
-        # find first low point after first peak
-        for i, bin in enumerate(kde[1]):
-            if i < 10 or i > len(kde[1]) - 5:
-                continue
-            elif bin < np.mean(kde[1][i-10:i+5]):
-                peak = i
-                break
-
-    threshold = kde[0][peak]
-    erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
-    return erf_rate
 
 
 def object_rate(center_trf, mask):
@@ -174,7 +74,7 @@ def object_rate(center_trf, mask):
     object_rate = object_area / trf_area
 
     return object_rate
-
+    
 
 def jaccard_index(im1, im2):
     im1 = im1.astype(bool)

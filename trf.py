@@ -31,7 +31,6 @@ def simulate_convolution_trf(prev_trf, k, s, p):
     return trf, max_trf_size
 
 
-
 def compute_trf(model, input_dim, print_output=False):
     n_modules = 0
     receptive_field = OrderedDict()

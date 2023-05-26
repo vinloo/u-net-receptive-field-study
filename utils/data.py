@@ -1,7 +1,6 @@
-from torch.utils.data import DataLoader, Dataset
-import torch
 import glob
-import os
+import torch
+from torch.utils.data import Dataset
 from torchvision.io import read_image
 from enum import Enum
 
@@ -65,6 +64,11 @@ class Modality(Enum):
 
 ALL_DATASETS = {
     "fetal_head": {
+        "labels": ["head"],
+        "n_labels": 1,
+        "modality": Modality.ULTRASOUND,
+    },
+    "fetal_head_2": {
         "labels": ["head"],
         "n_labels": 1,
         "modality": Modality.ULTRASOUND,
