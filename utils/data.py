@@ -108,4 +108,14 @@ ALL_DATASETS = {
         "n_labels": 1,
         "modality": Modality.MRI,
     },
+    "kidney": {
+        "labels": ["kidney"],
+        "n_labels": 1,
+        "modality": Modality.MRI,
+    },
+    "lungs": {
+        "labels": ["lungs"],
+        "n_labels": 1,
+        "modality": Modality.XRAY,
+    }
 }

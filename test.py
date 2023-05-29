@@ -184,7 +184,6 @@ def main(all, dataset, config, no_progress=False):
             except FileNotFoundError:
                 print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
                 skip = True
-                continue
         
         if not skip:
             for label in dataset_results:
@@ -206,7 +205,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys())
-    parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS, required=True)
+    parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS)
     group.add_argument("-a", "--all", action="store_true", help="preprocess all datasets")
     parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
     args = parser.parse_args()

@@ -6,6 +6,7 @@
 
 ## Preprocessing
 Unzip the datasets in the `preprocessed/raw` folder and run `python preprocess.py` with the following arguments.
+> NOTE: the preprocessing script does not take into account class balancing. This has to be inspected and corrected seperately. An example on how to do this is shown in [`notebooks/dataset_balance.ipynb`](notebooks/dataset_balance.ipynb)
 
 | **Argument**         |          **Flag**         | **Required** | **Type** |       **Default value**       |
 |----------------------|:-------------------------:|:------------:|:--------:|:-----------------------------:|

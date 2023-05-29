@@ -77,7 +77,7 @@ class Trainer:
 
     def run_trainer(self, dataset_name, config_name, out_dir):
         out_path = get_output_path(dataset_name, config_name, out_dir)
-        early_stopper = EarlyStopper(patience=50)
+        early_stopper = EarlyStopper(patience=25)
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
             self.epoch += 1

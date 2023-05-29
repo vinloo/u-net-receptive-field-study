@@ -192,7 +192,7 @@ def preprocess_fetal_head_data_2(val_rate, test_rate, n_augmentations=0):
                     mask_aug.save(f"data/preprocessed/fetal_head_2/{target}/masks/{img_id}.png")
 
 
-def process_breast_cancer_data(val_rate, test_rate):
+def process_breast_cancer_data(val_rate, test_rate, n_augmentations=0):
     files = glob.glob("data/raw/breast_cancer/Dataset_BUSI_with_GT/*/*")
     files.sort()
 
@@ -209,8 +209,8 @@ def process_breast_cancer_data(val_rate, test_rate):
     
     for i in sample_ns:
         img = files[i]
-        ann = files[i + 1]
-        assert ann.endswith("_mask.png") and not img.endswith("_mask.png")
+        mask = files[i + 1]
+        assert mask.endswith("_mask.png") and not img.endswith("_mask.png")
 
         img_id = uuid.uuid4().hex
 
@@ -223,12 +223,18 @@ def process_breast_cancer_data(val_rate, test_rate):
             target = "test"
 
         img = Image.open(img)
-        ann = Image.open(ann)
+        mask = Image.open(mask)
         img = reformat(img)
-        ann = reformat(ann)
+        mask = reformat(mask)
 
         img.save(f"data/preprocessed/breast_cancer/{target}/{img_id}.png")
-        ann.save(f"data/preprocessed/breast_cancer/{target}/masks/{img_id}.png")
+        mask.save(f"data/preprocessed/breast_cancer/{target}/masks/{img_id}.png")
+
+        for i in range(n_augmentations):
+            img_id = uuid.uuid4().hex
+            img_aug, mask_aug = random_augmentations(img, mask)
+            img_aug.save(f"data/preprocessed/breast_cancer/{target}/{img_id}.png")
+            mask_aug.save(f"data/preprocessed/breast_cancer/{target}/masks/{img_id}.png")
 
 
 def process_mouse_embryo_data(val_rate, test_rate):
@@ -369,7 +375,7 @@ def process_pancreas_data(val_rate, test_rate):
             mask.save(f"data/preprocessed/pancreas/{target}/masks/{img_id}.png")
 
 
-def process_brain_data(val_rate, test_rate):
+def process_brain_data(val_rate, test_rate, n_augmentations=0):
     files = glob.glob("data/raw/brain_mri/kaggle_3m/**/*.tif", recursive=True)
 
     files_img = [f for f in files if "mask" not in f]
@@ -433,9 +439,16 @@ def process_brain_data(val_rate, test_rate):
 
             img.save(f"data/preprocessed/brain_tumor/{target}/{img_id}.png")
             mask.save(f"data/preprocessed/brain_tumor/{target}/masks/{img_id}.png")
+
+            for i in range(n_augmentations):
+                img_id = uuid.uuid4().hex
+                img_aug, mask_aug = random_augmentations(img, mask)
+                img_aug.save(f"data/preprocessed/brain_tumor/{target}/{img_id}.png")
+                mask_aug.save(f"data/preprocessed/brain_tumor/{target}/masks/{img_id}.png")
+
             
 
-def process_prostate_data(val_rate, test_rate):
+def process_prostate_data(val_rate, test_rate, n_augmentations=0):
     files = glob.glob("data/raw/prostate_mri/**/*.nii.gz", recursive=True)
     files.sort()
     files_img = [f for f in files if "segmentation" not in f.lower()]
@@ -484,6 +497,13 @@ def process_prostate_data(val_rate, test_rate):
             img_id = uuid.uuid4().hex
             img_slice.save(f"data/preprocessed/prostate/{target}/{img_id}.png")
             mask_slice.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
+
+            for i in range(n_augmentations):
+                img_id = uuid.uuid4().hex
+                img_aug, mask_aug = random_augmentations(img_slice, img_slice)
+                img_aug.save(f"data/preprocessed/prostate/{target}/{img_id}.png")
+                mask_aug.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
+
          
 
 def preprocess_covid_data(val_rate, test_rate):
@@ -614,6 +634,97 @@ def preprocess_covid_data_2(val_rate, test_rate, n_augmentations=0):
                 mask_aug.save(f"data/preprocessed/covid_2/{target}/masks/{img_id}.png")
 
 
+def preprocess_kidney_data(val_rate, test_rate, n_augmentations=0):
+    files = glob.glob("data/raw/kidney/*.nii.gz")
+    img_files = [f for f in files if "mask" not in f]
+    mask_files = [f for f in files if "mask" in f]
+    img_files.sort()
+    mask_files.sort()
+
+    pairs = list(zip(img_files, mask_files))
+
+    for img, mask in pairs:
+        assert img[:26] == mask[:26]
+
+    n_samples = len(img_files)
+    n_train = int(n_samples * (1 - val_rate - test_rate))
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+
+    for i, (img_file, mask_file) in enumerate(pairs):
+        if i < n_train:
+            target = "train"
+        elif i >= n_train and i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        img = nib.load(img_file).get_fdata()
+        img = np.array(img)
+        img = (img - img.min()) / (img.max() - img.min()) * 255
+        img = img.astype(np.uint8)
+        mask = nib.load(mask_file).get_fdata()
+        mask = np.array(mask)
+        mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+        mask = mask.astype(np.uint8)
+
+        for slice in range(img.shape[2]):
+            img_slice = img[:, :, slice]
+            mask_slice = mask[:, :, slice]
+            img_slice = Image.fromarray(img_slice)
+            mask_slice = Image.fromarray(mask_slice)
+
+            img_slice = reformat(img_slice)
+            mask_slice = reformat(mask_slice)
+
+            img_id = uuid.uuid4().hex
+            img_slice.save(f"data/preprocessed/kidney/{target}/{img_id}.png")
+            mask_slice.save(f"data/preprocessed/kidney/{target}/masks/{img_id}.png")
+
+            for i in range(n_augmentations):
+                img_id = uuid.uuid4().hex
+                img_aug, mask_aug = random_augmentations(img_slice, img_slice)
+                img_aug.save(f"data/preprocessed/kidney/{target}/{img_id}.png")
+                mask_aug.save(f"data/preprocessed/kidney/{target}/masks/{img_id}.png")
+
+
+def preprocess_lungs_date(val_rate, test_rate, n_augmentations=0):
+    img_files = glob.glob("data/raw/lungs/img/*.png")
+    img_files.sort()
+    mask_files = glob.glob("data/raw/lungs/mask/*.png")
+    mask_files.sort()
+
+    n_samples = len(img_files)
+    n_train = int(n_samples * (1 - val_rate - test_rate))
+    n_val = int(n_samples * val_rate)
+
+    for i, (img_file, mask_file) in enumerate(zip(img_files, mask_files)):
+        assert img_file == mask_file.replace("mask", "img")
+
+        if i < n_train:
+            target = "train"
+        elif i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        img = Image.open(img_file)
+        mask = Image.open(mask_file)
+        img = reformat(img)
+        mask = reformat(mask)
+
+        img_id = uuid.uuid4().hex
+
+        img.save(f"data/preprocessed/lungs/{target}/{img_id}.png")
+        mask.save(f"data/preprocessed/lungs/{target}/masks/{img_id}.png")
+
+        for i in range(n_augmentations):
+            img_id = uuid.uuid4().hex
+            img_aug, mask_aug = random_augmentations(img, mask)
+            img_aug.save(f"data/preprocessed/lungs/{target}/{img_id}.png")
+            mask_aug.save(f"data/preprocessed/lungs/{target}/masks/{img_id}.png")
+
+
 def preprocess(dataset, val_rate, test_rate):
     clear_data(dataset)
 
@@ -622,19 +733,23 @@ def preprocess(dataset, val_rate, test_rate):
     elif dataset == "fetal_head_2":
         preprocess_fetal_head_data_2(val_rate, test_rate, 4)
     elif dataset == "breast_cancer":
-        process_breast_cancer_data(val_rate, test_rate)
+        process_breast_cancer_data(val_rate, test_rate, 5)
     elif dataset == "mouse_embryo":
         process_mouse_embryo_data(val_rate, test_rate)
     elif dataset == "pancreas":
         process_pancreas_data(val_rate, test_rate)
     elif dataset == "brain_tumor":
-        process_brain_data(val_rate, test_rate)
+        process_brain_data(val_rate, test_rate, 4)
     elif dataset == "prostate":
-        process_prostate_data(val_rate, test_rate)
+        process_prostate_data(val_rate, test_rate, 4)
     elif dataset == "covid":
         preprocess_covid_data(val_rate, test_rate)
     elif dataset == "covid_2":
-        preprocess_covid_data_2(val_rate, test_rate, 2)
+        preprocess_covid_data_2(val_rate, test_rate, 4)
+    elif dataset == "kidney":
+        preprocess_kidney_data(val_rate, test_rate, 0)
+    elif dataset == "lungs":
+        preprocess_lungs_date(val_rate, test_rate, 0)
     else:
         raise ValueError("Invalid dataset")
 
