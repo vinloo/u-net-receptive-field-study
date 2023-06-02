@@ -63,6 +63,12 @@ class Modality(Enum):
 
 
 ALL_DATASETS = {
+    # dummy dataset for architecture testing
+    "dummy": {
+        "labels": ["dummy"],
+        "n_labels": 1,
+        "modality": None,
+    },
     "fetal_head": {
         "labels": ["head"],
         "n_labels": 1,
@@ -117,5 +123,25 @@ ALL_DATASETS = {
         "labels": ["lungs"],
         "n_labels": 1,
         "modality": Modality.XRAY,
-    }
+    },
+    "thyroid": {
+        "labels": ["thyroid"],
+        "n_labels": 1,
+        "modality": Modality.ULTRASOUND,
+    },
+    "nerve": {
+        "labels": ["nerve"],
+        "n_labels": 1,
+        "modality": Modality.ULTRASOUND,
+    },
+    "shapes_a": { 
+        "labels": ["shapes"],
+        "n_labels": 1,
+        "modality": None,
+    },
+    "shapes_b": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+        "modality": None,
+    },
 }

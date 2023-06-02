@@ -498,9 +498,9 @@ def process_prostate_data(val_rate, test_rate, n_augmentations=0):
             img_slice.save(f"data/preprocessed/prostate/{target}/{img_id}.png")
             mask_slice.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
 
-            for i in range(n_augmentations):
+            for _ in range(n_augmentations):
                 img_id = uuid.uuid4().hex
-                img_aug, mask_aug = random_augmentations(img_slice, img_slice)
+                img_aug, mask_aug = random_augmentations(img_slice, mask_slice)
                 img_aug.save(f"data/preprocessed/prostate/{target}/{img_id}.png")
                 mask_aug.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
 
@@ -725,6 +725,199 @@ def preprocess_lungs_date(val_rate, test_rate, n_augmentations=0):
             mask_aug.save(f"data/preprocessed/lungs/{target}/masks/{img_id}.png")
 
 
+def preprocess_nerve_data(val_rate, test_rate, n_augmentations=0):
+    files = glob.glob("data/raw/nerve/*.tif")
+    files_img = [f for f in files if "mask" not in f]
+    files_mask = [f for f in files if "mask" in f]
+
+    pairs = []
+    for img_file in files_img:
+        mask_file = img_file[:-4] + "_mask.tif"
+        if mask_file in files_mask:
+            pairs.append((img_file, mask_file))
+
+    random.shuffle(pairs)
+
+    n_samples = len(pairs)
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+    n_train = n_samples - n_val - n_test
+
+    for i, (img, mask) in tqdm(enumerate(pairs), total=len(pairs)):
+
+        if i < n_train:
+            target = "train"
+        elif i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+
+        assert img[:-4] == mask[:-9], img + " " + mask
+        img = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
+        img = Image.fromarray(img)
+        img = reformat(img)
+        mask = cv2.imread(mask, cv2.IMREAD_GRAYSCALE)
+        # mask = np.where(mask > 0, 255, 0)
+        mask = Image.fromarray(mask)
+        mask = reformat(mask)
+
+        if np.sum(mask) == 0:
+            continue
+
+        img_id = uuid.uuid4().hex
+        img.save(f"data/preprocessed/nerve/{target}/{img_id}.png")
+        mask.save(f"data/preprocessed/nerve/{target}/masks/{img_id}.png")
+
+        for _ in range(n_augmentations):
+            img_id = uuid.uuid4().hex
+            img_aug, mask_aug = random_augmentations(img, mask)
+            img_aug.save(f"data/preprocessed/nerve/{target}/{img_id}.png")
+            mask_aug.save(f"data/preprocessed/nerve/{target}/masks/{img_id}.png")
+
+
+def preprocess_thyroid_data(val_rate, test_rate, n_augmentations=0):
+    img_files = glob.glob("data/raw/thyroid/data/*.dcm")
+    img_files.sort()
+    mask_files = glob.glob("data/raw/thyroid/groundtruth/*.dcm")
+    mask_files.sort()
+
+    pairs = list(zip(img_files, mask_files))
+    random.shuffle(pairs)
+
+    n_samples = len(pairs)
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+    n_train = n_samples - n_val - n_test
+
+
+    for i, (img_file, mask_file) in tqdm(enumerate(pairs), total=n_samples):
+        assert img_file[-7:] == mask_file[-7:], img_file + " " + mask_file
+
+        img_vol = pydicom.dcmread(img_file).pixel_array
+        mask_vol = pydicom.dcmread(mask_file).pixel_array
+
+        assert img_vol.shape == mask_vol.shape
+
+        if i < n_train:
+            target = "train"
+        elif i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+
+        for j in tqdm(range(img_vol.shape[0]), total=img_vol.shape[0], leave=False):
+
+            # if j % 5 != 0:
+            #     continue
+
+            img = img_vol[j]
+            mask = mask_vol[j]
+            img = img_vol[j]
+
+            if img.sum() == 0 or mask.sum() == 0:
+                continue
+
+            img = (img - img.min()) / (img.max() - img.min()) * 255
+            mask = mask_vol[j]
+            mask = (mask - mask.min()) / (mask.max() - mask.min()) * 255
+            
+            img = Image.fromarray(img)
+            img = reformat(img)
+            mask = Image.fromarray(mask)
+            mask = reformat(mask)
+
+            img_id = uuid.uuid4().hex
+
+            img.save(f"data/preprocessed/thyroid/{target}/{img_id}.png")
+            mask.save(f"data/preprocessed/thyroid/{target}/masks/{img_id}.png")
+
+            for _ in range(n_augmentations):
+                img_id = uuid.uuid4().hex
+                img_aug, mask_aug = random_augmentations(img, mask)
+                img_aug.save(f"data/preprocessed/prostate/{target}/{img_id}.png")
+                mask_aug.save(f"data/preprocessed/prostate/{target}/masks/{img_id}.png")
+
+
+def preprocess_shapes_a_data(val_rate, test_rate, n_augmentations=0):
+    img_files_a = glob.glob("data/raw/shape_datasets/SetA/*.png")
+    img_files_a.sort()
+    mask_files_a = glob.glob("data/raw/shape_datasets/SetA_Mask/*.png")
+    mask_files_a.sort()
+
+    pairs_a = list(zip(img_files_a, mask_files_a))
+
+    n_samples = len(pairs_a)
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+    n_train = n_samples - n_val - n_test
+
+    for i, (img_file, mask_file) in tqdm(enumerate(pairs_a), total=n_samples):
+        if i < n_train:
+            target = "train"
+        elif i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        assert img_file[-8:] == mask_file[-8:]
+        img = Image.open(img_file)
+        img = reformat(img)
+        mask = Image.open(mask_file)
+        mask = reformat(mask)
+
+        img_id = uuid.uuid4().hex
+
+        img.save(f"data/preprocessed/shapes_a/{target}/{img_id}.png")
+        mask.save(f"data/preprocessed/shapes_a/{target}/masks/{img_id}.png")
+
+        for _ in range(n_augmentations):
+            img_id = uuid.uuid4().hex
+            img_aug, mask_aug = random_augmentations(img, mask)
+            img_aug.save(f"data/preprocessed/shapes_a/{target}/{img_id}.png")
+            mask_aug.save(f"data/preprocessed/shapes_a/{target}/masks/{img_id}.png")
+
+
+def preprocess_shapes_b_data(val_rate, test_rate, n_augmentations=0):
+    img_files_b = glob.glob("data/raw/shape_datasets/SetB/*.png")
+    img_files_b.sort()
+    mask_files_b = glob.glob("data/raw/shape_datasets/SetB_Mask/*.png")
+    mask_files_b.sort()
+
+    pairs_b = list(zip(img_files_b, mask_files_b))
+
+    n_samples = len(pairs_b)
+    n_val = int(n_samples * val_rate)
+    n_test = int(n_samples * test_rate)
+    n_train = n_samples - n_val - n_test
+
+    for i, (img_file, mask_file) in tqdm(enumerate(pairs_b), total=len(pairs_b)):
+        if i < n_train:
+            target = "train"
+        elif i < n_train + n_val:
+            target = "val"
+        else:
+            target = "test"
+
+        assert img_file[-8:] == mask_file[-8:]
+        img = Image.open(img_file)
+        img = reformat(img)
+        mask = Image.open(mask_file)
+        mask = reformat(mask)
+
+        img_id = uuid.uuid4().hex
+
+        img.save(f"data/preprocessed/shapes_b/{target}/{img_id}.png")
+        mask.save(f"data/preprocessed/shapes_b/{target}/masks/{img_id}.png")
+
+        for _ in range(n_augmentations):
+            img_id = uuid.uuid4().hex
+            img_aug, mask_aug = random_augmentations(img, mask)
+            img_aug.save(f"data/preprocessed/shapes_b/{target}/{img_id}.png")
+            mask_aug.save(f"data/preprocessed/shapes_b/{target}/masks/{img_id}.png")
+
+
 def preprocess(dataset, val_rate, test_rate):
     clear_data(dataset)
 
@@ -750,6 +943,14 @@ def preprocess(dataset, val_rate, test_rate):
         preprocess_kidney_data(val_rate, test_rate, 0)
     elif dataset == "lungs":
         preprocess_lungs_date(val_rate, test_rate, 0)
+    elif dataset == "nerve":
+        preprocess_nerve_data(val_rate, test_rate, 0)
+    elif dataset == "thyroid":
+        preprocess_thyroid_data(val_rate, test_rate, 0)
+    elif dataset == "shapes_a":
+        preprocess_shapes_a_data(val_rate, test_rate, 0)
+    elif dataset == "shapes_b":
+        preprocess_shapes_b_data(val_rate, test_rate, 0)
     else:
         raise ValueError("Invalid dataset")
 
