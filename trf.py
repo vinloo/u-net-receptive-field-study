@@ -46,9 +46,19 @@ def compute_trf(model, input_dim, print_output=False):
     blocks = dict()
 
     encoding = True
+    
+    skip_attention = 0
 
     for module in model.modules():
         class_name = module.__class__.__name__
+
+        # skip attention blocks because they do not impact the receptive field
+        if class_name == "AttentionBlock":
+            skip_attention += 3
+            continue
+        elif skip_attention > 0:
+            skip_attention -= 1
+            continue
 
         if class_name not in ["Sequential", "ModuleList", "Module", "Linear", "ConvBlock", "EncoderBlock", "DecoderBlock", "BottleNeck", "UNet"]:
             n_modules += 1

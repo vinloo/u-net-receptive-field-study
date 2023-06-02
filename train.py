@@ -8,23 +8,13 @@ import json
 from utils.data import SegmentationDataset
 from utils.config import load_config, ALL_CONFIGS
 from utils.data import ALL_DATASETS
+from utils.files import get_output_path
 from torchvision.io import read_image
 from dotmap import DotMap
 from unet import UNet
 from torch.utils.data import DataLoader, Dataset
 from typing import Optional
 from tqdm import tqdm, trange
-
-
-def get_output_path(dataset_name, config_name, out_dir, clear_existing=False):
-    """Create output path for the model and the results"""
-    path = f"{out_dir}/{dataset_name}/{config_name}"
-    if not os.path.exists(path):
-        os.makedirs(path)
-    elif clear_existing:
-        shutil.rmtree(path)
-        os.makedirs(path)
-    return path
 
 
 class EarlyStopper:
@@ -57,7 +47,8 @@ class Trainer:
         epochs: int = 100,
         epoch: int = 0,
         scheduler = None,
-        no_progressbar: bool = False
+        no_progressbar: bool = False,
+        attention: bool = False
     ):
         self.model = model
         self.criterion = criterion
@@ -74,9 +65,10 @@ class Trainer:
         self.learning_rate = []
         self.scheduler = scheduler
         self.no_progressbar = no_progressbar
+        self.attention = attention
 
     def run_trainer(self, dataset_name, config_name, out_dir):
-        out_path = get_output_path(dataset_name, config_name, out_dir)
+        out_path = get_output_path(dataset_name, config_name, out_dir, self.attention)
         early_stopper = EarlyStopper(patience=25)
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
@@ -160,7 +152,7 @@ class Trainer:
         batch_iter.close()
 
 
-def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, out_dir="out", no_progress=False):
+def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, out_dir="out", no_progress=False, attention=False):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
@@ -169,7 +161,7 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
     dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
 
-    model = UNet(config, dataset_train.n_labels).to(device)
+    model = UNet(config, attention, dataset_train.n_labels).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.BCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
@@ -183,16 +175,17 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         validation_dataloader=dataloader_val,
         epochs=n_epochs,
         scheduler=scheduler,
-        no_progressbar=no_progress
+        no_progressbar=no_progress,
+        attention=attention
     )
 
-    get_output_path(dataset_name, config_name, out_dir, clear_existing=True)
+    get_output_path(dataset_name, config_name, out_dir, attention, clear_existing=True)
     trainer.run_trainer(dataset_name, config_name, out_dir)
 
     print("Training finished")
     print("Lowest validation loss at epoch", trainer.validation_loss.index(min(trainer.validation_loss)))
 
-    out_path = get_output_path(dataset_name, config_name, out_dir)
+    out_path = get_output_path(dataset_name, config_name, out_dir, attention)
 
     plt.plot(trainer.training_loss, label="Training loss")
     plt.plot(trainer.validation_loss, label="Validation loss")
@@ -225,10 +218,11 @@ def main():
     parser.add_argument("-l", "--learning_rate", type=float, default=0.0001, help="learning rate")
     parser.add_argument("-o", "--output_dir", type=str, default="out", help="output folder")
     parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
+    parser.add_argument("-a", "--attention", action="store_true", help="attention u-net")
     args = parser.parse_args()
 
     config = load_config(args.config)
-    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, out_dir=args.output_dir, no_progress=args.no_progress)
+    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, out_dir=args.output_dir, no_progress=args.no_progress, attention=args.attention)
     
 
 if __name__ == "__main__":

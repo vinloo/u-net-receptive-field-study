@@ -25,6 +25,7 @@ Training the model can be done by running `python train.py -d <dataset> -c <conf
 | Learning rate     | `-l` or `--learning_rate` |      no      |   float  |                        0.0001 |
 | Output folder     | `-o` or `--output_dir`    |      no      |    str   |                         "out" |
 | Hide progress bar | `-n` or `--no_progress`   |      no      |          |                         False |
+| Attention U-Net   | `-a` or `--attention`     |      no      |          |                         False |
 
 After training, the best model for each dataset and configuration is stored in `out/{dataset_name}/{config_name}`.
 
@@ -33,6 +34,7 @@ Testing the model can be done by running `python test.py -d <dataset> -c <config
 | **Argument**      |          **Flag**         | **Required** | **Type** |       **Default value**       |
 |-------------------|:-------------------------:|:------------:|:--------:|:-----------------------------:|
 | Dataset           | `-d` or `--dataset`       |      yes     |    str   |                          None |
-| All datasets      | `-a` or `--all`           |              |          |                         False |
+| All datasets      | `--all`                   |              |          |                         False |
 | Model config file | `-c` or `--config`        |      no      |    str   |                          None |
 | Hide progress bar | `-n` or `--no_progress`   |      no      |          |                         False |
+| Attention U-Net   | `-a` or `--attention`     |      no      |          |                         False |

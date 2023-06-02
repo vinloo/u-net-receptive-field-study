@@ -38,17 +38,27 @@ class EncoderBlock(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-    def __init__(self, in_c, out_c, conf):
+    def __init__(self, in_c, out_c, attention, conf):
         super().__init__()
 
+        self.has_attention = attention
+
+        if attention:
+            self.attention = AttentionBlock(out_c)
         self.up = nn.ConvTranspose2d(in_c, out_c, kernel_size=conf.deconv_k, padding=conf.deconv_p, stride=conf.deconv_s)
         self.conv = ConvBlock(out_c + out_c, out_c, conf)
 
         self.n_submodules = self.conv.n_submodules + 1
 
     def forward(self, inputs, skip):
-        x = self.up(inputs)
-        x = torch.cat([x, skip], axis=1)
+        a = self.up(inputs)
+
+        if self.has_attention:
+            b = self.attention(skip, a)
+        else:
+            b = skip
+
+        x = torch.cat([a, b], axis=1)
         x = self.conv(x)
 
         return x
@@ -63,11 +73,29 @@ class BottleNeck(nn.Module):
         return self.conv(x)
 
 
+class AttentionBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, kernel_size=(1,1))
+        self.relu = nn.ReLU(inplace=True)
+        self.sigmoid = nn.Sigmoid()
+        self.n_submodules = 3
+
+    def forward(self, skip, gating):
+        a = self.conv(skip)
+        b = self.conv(gating)
+        x = a + b
+        x = self.relu(x)
+        x = self.sigmoid(x)
+        x = gating * x
+        return x
+
 
 class UNet(nn.Module):
-    def __init__(self, conf: DotMap, n_labels: int = 1):
+    def __init__(self, conf: DotMap, attention=False, n_labels: int = 1):
         super().__init__()
         self.config = conf
+        self.attention = attention
         c_in = 1 if conf.grayscale else 3
 
         self.encoders = nn.ModuleList([])
@@ -81,7 +109,7 @@ class UNet(nn.Module):
                 self.encoders.append(EncoderBlock(conf.channels[i-1], conf.channels[i], conf))
 
         for i in range(conf.depth, 0, -1):
-            self.decoders.append(DecoderBlock(conf.channels[i], conf.channels[i-1], conf))
+            self.decoders.append(DecoderBlock(conf.channels[i], conf.channels[i-1], attention, conf))
 
         self.outputs = nn.Conv2d(conf.channels[0], n_labels, kernel_size=1, padding=0, stride=1)
 

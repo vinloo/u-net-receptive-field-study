@@ -9,6 +9,7 @@ from tqdm import tqdm
 from unet import UNet
 from torch.utils.data import DataLoader
 from utils.config import load_config, ALL_CONFIGS
+from utils.files import get_output_path
 from utils.metrics import dice_score, erf_rate_from_dist, object_rate, jaccard_index, specificity, sensitivity, accuracy
 from utils.data import SegmentationDataset
 from utils.data import ALL_DATASETS
@@ -17,10 +18,10 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def test_model(config_name, dataset_name, device="cuda", no_progress=False):
+def test_model(config_name, dataset_name, device="cuda", no_progress=False, attention=False):
     config = load_config(config_name)
     nlabels = ALL_DATASETS[dataset_name]["n_labels"]
-    model = UNet(config, n_labels=nlabels).to(device)
+    model = UNet(config, n_labels=nlabels, attention=attention).to(device)
 
     model.eval()
     trf = model.center_trf()
@@ -32,7 +33,7 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
     results = dict()
 
     for li, label in enumerate(labels):
-        model = UNet(config, n_labels=nlabels).to(device)
+        model = UNet(config, n_labels=nlabels, attention=attention).to(device)
 
         bt_erf_dist = np.zeros((576, 576, len(dataloader_test)))
 
@@ -57,7 +58,8 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
         bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
 
         # metrics after training
-        state = torch.load(f"out/{dataset_name}/{config_name}/best_model.pt")["model_state_dict"]
+        base_path = get_output_path(dataset_name, config_name, "out", attention)
+        state = torch.load(f"{base_path}/best_model.pt")["model_state_dict"]
         model.load_state_dict(state)
 
         erf_dist = np.zeros((576, 576, len(dataloader_test)))
@@ -69,7 +71,7 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
         jaccard_scores = []
 
         # training time from json file
-        with open(f"out/{dataset_name}/{config_name}/result.json", "r") as json_file:
+        with open(f"{base_path}/result.json", "r") as json_file:
             data = json.load(json_file)
             training_time = data["training_time"]
 
@@ -148,7 +150,7 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False):
     return results
 
 
-def main(all, dataset, config, no_progress=False):
+def main(all, dataset, config, no_progress=False, attention=False):
     if dataset is None:
         assert all
         dataset = "all"
@@ -178,7 +180,7 @@ def main(all, dataset, config, no_progress=False):
         dataset_results = {label: pd.DataFrame(columns=configurations) for label in ALL_DATASETS[dataset_name]["labels"]}
         for config_name in configurations:
             try:
-                result = test_model(config_name, dataset_name, device, no_progress=no_progress)
+                result = test_model(config_name, dataset_name, device, no_progress=no_progress, attention=attention)
                 for label in result:
                     dataset_results[label][config_name] = pd.Series(result[label])
             except FileNotFoundError:
@@ -206,7 +208,8 @@ if __name__ == "__main__":
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys())
     parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS)
-    group.add_argument("-a", "--all", action="store_true", help="preprocess all datasets")
+    group.add_argument("--all", action="store_true", help="preprocess all datasets")
     parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
+    parser.add_argument("-a", "--attention", action="store_true", help="attention u-net")
     args = parser.parse_args()
-    main(args.all, args.dataset, args.config, args.no_progress)
+    main(args.all, args.dataset, args.config, args.no_progress, args.attention)
