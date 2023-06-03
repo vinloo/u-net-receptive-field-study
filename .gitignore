@@ -5,6 +5,8 @@ data/preprocessed/*
 out/*
 !out/.gitkeep
 
+preprocessing_hidden.py
+
 *.pt
 *.zip
 

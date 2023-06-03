@@ -13,6 +13,8 @@ Unzip the datasets in the `preprocessed/raw` folder and run `python preprocess.p
 | Dataset              | `-d` or `--dataset`       |      yes     |    str   |                          None |
 | Validation set rate  | `-v` or `--val_rate`      |      no      |   float  |                          0.15 |
 | Test set rate        | `-t` or `--test_rate`     |      no      |   float  |                          0.15 |
+| Augmentation factor  | `-a` or `--augmentations` |      no      |    int   |                             0 |
+
 
 ## Training
 Training the model can be done by running `python train.py -d <dataset> -c <configuration>`. The dataset and configuration are the only required argument, all other arguments have default values as listed in this table:

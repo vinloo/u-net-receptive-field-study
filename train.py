@@ -1,15 +1,12 @@
-import os
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
-import shutil
 import json
 from utils.data import SegmentationDataset
 from utils.config import load_config, ALL_CONFIGS
 from utils.data import ALL_DATASETS
 from utils.files import get_output_path
-from torchvision.io import read_image
 from dotmap import DotMap
 from unet import UNet
 from torch.utils.data import DataLoader, Dataset
@@ -18,13 +15,31 @@ from tqdm import tqdm, trange
 
 
 class EarlyStopper:
-    def __init__(self, patience=20, min_delta=0):
+    def __init__(self, patience: int = 20, min_delta: float = 0):
+        """
+        Initializes an EarlyStopper object.
+
+        Args:
+            patience (int): The number of epochs to wait before stopping training.
+            min_delta (float): The minimum change in validation loss required to consider it an improvement.
+
+        """
         self.patience = patience
         self.min_delta = min_delta
         self.counter = 0
         self.min_validation_loss = np.inf
 
-    def early_stop(self, validation_loss):
+    def early_stop(self, validation_loss: float):
+        """
+        Determines whether to stop training early based on the validation loss.
+
+        Args:
+            validation_loss (float): The validation loss.
+
+        Returns:
+            bool: True if training should stop, False otherwise.
+
+        """
         if validation_loss < self.min_validation_loss:
             self.min_validation_loss = validation_loss
             self.counter = 0
@@ -46,10 +61,27 @@ class Trainer:
         validation_dataloader: Optional[Dataset] = None,
         epochs: int = 100,
         epoch: int = 0,
-        scheduler = None,
+        scheduler=None,
         no_progressbar: bool = False,
         attention: bool = False
     ):
+        """
+        Initializes a Trainer object.
+
+        Args:
+            model (torch.nn.Module): The model to train.
+            device (torch.device): The device to use for training.
+            criterion (torch.nn.Module): The loss function to use.
+            optimizer (torch.optim.Optimizer): The optimizer to use.
+            training_dataloader (Dataset): The training dataset.
+            validation_dataloader (Optional[Dataset]): The validation dataset (default is None).
+            epochs (int): The number of epochs to train for (default is 100).
+            epoch (int): The current epoch (default is 0).
+            scheduler: The learning rate scheduler to use (default is None).
+            no_progressbar (bool): Whether to disable the progress bar (default is False).
+            attention (bool): Whether to use attention gates in the model (default is False).
+
+        """
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
@@ -68,7 +100,20 @@ class Trainer:
         self.attention = attention
 
     def run_trainer(self, dataset_name, config_name, out_dir):
-        out_path = get_output_path(dataset_name, config_name, out_dir, self.attention)
+        """
+        Runs the trainer on the training and validation datasets.
+
+        Args:
+            dataset_name (str): The name of the dataset.
+            config_name (str): The name of the configuration file.
+            out_dir (str): The output directory.
+
+        Returns:
+            Tuple[List[float], List[float], List[float]]: A tuple containing the training loss, validation loss, and learning rate.
+
+        """
+        out_path = get_output_path(
+            dataset_name, config_name, out_dir, self.attention)
         early_stopper = EarlyStopper(patience=25)
         progressbar = trange(self.epochs, desc="Progress")
         for i in progressbar:
@@ -86,12 +131,17 @@ class Trainer:
                 }, f"{out_path}/best_model.pt")
 
             if early_stopper.early_stop(self.validation_loss[-1]):
-                print(f"Stopping early because validation loss has not improved for {early_stopper.patience} epochs")
+                print(
+                    f"Stopping early because validation loss has not improved for {early_stopper.patience} epochs")
                 break
 
         return self.training_loss, self.validation_loss, self.learning_rate
 
     def _train(self):
+        """
+        Trains the model on the training dataset.
+
+        """
         self.model.train()
         train_losses = []
         batch_iter = tqdm(
@@ -105,7 +155,7 @@ class Trainer:
         for _, (x, y) in batch_iter:
             input_x = x.to(self.device)
             input_x.requires_grad = True
-            target_y =  y.to(self.device) / 255
+            target_y = y.to(self.device) / 255
             self.optimizer.zero_grad()
             out = self.model(input_x)
             loss = self.criterion(out, target_y)
@@ -125,6 +175,10 @@ class Trainer:
         batch_iter.close()
 
     def _validate(self):
+        """
+        Validates the model on the validation dataset.
+
+        """
         self.model.eval()
         valid_losses = []
         batch_iter = tqdm(
@@ -153,18 +207,36 @@ class Trainer:
 
 
 def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batch_size=1, lr=0.01, out_dir="out", no_progress=False, attention=False):
+    """
+    Trains a UNet model on a segmentation dataset.
+
+    Args:
+        config (DotMap): The configuration for the UNet model.
+        dataset_name (str): The name of the dataset.
+        config_name (str): The name of the configuration file.
+        n_epochs (int): The number of epochs to train for (default is 10).
+        batch_size (int): The batch size to use (default is 1).
+        lr (float): The learning rate to use (default is 0.01).
+        out_dir (str): The output directory (default is "out").
+        no_progress (bool): Whether to disable the progress bar (default is False).
+        attention (bool): Whether to use attention gates in the model (default is False).
+
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device}")
 
     dataset_train = SegmentationDataset(dataset_name, "train")
     dataset_val = SegmentationDataset(dataset_name, "val")
-    dataloader_train = DataLoader(dataset_train, batch_size=batch_size, shuffle=True)
-    dataloader_val = DataLoader(dataset_val, batch_size=batch_size, shuffle=True)
+    dataloader_train = DataLoader(
+        dataset_train, batch_size=batch_size, shuffle=True)
+    dataloader_val = DataLoader(
+        dataset_val, batch_size=batch_size, shuffle=True)
 
     model = UNet(config, attention, dataset_train.n_labels).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = torch.nn.BCEWithLogitsLoss()
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=4, min_lr=1e-9)
 
     trainer = Trainer(
         model=model,
@@ -179,11 +251,13 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
         attention=attention
     )
 
-    get_output_path(dataset_name, config_name, out_dir, attention, clear_existing=True)
+    get_output_path(dataset_name, config_name, out_dir,
+                    attention, clear_existing=True)
     trainer.run_trainer(dataset_name, config_name, out_dir)
 
     print("Training finished")
-    print("Lowest validation loss at epoch", trainer.validation_loss.index(min(trainer.validation_loss)))
+    print("Lowest validation loss at epoch",
+          trainer.validation_loss.index(min(trainer.validation_loss)))
 
     out_path = get_output_path(dataset_name, config_name, out_dir, attention)
 
@@ -207,23 +281,32 @@ def train(config: DotMap, dataset_name: str, config_name: str, n_epochs=10, batc
     # write results to json
     with open(f'{out_path}/result.json', 'w') as f:
         json.dump(results, f)
-    
+
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys(), required=True)
-    parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS, required=True)
-    parser.add_argument("-e", "--epochs", type=int, default=200, help="number of epochs")
-    parser.add_argument("-b", "--batch_size", type=int, default=2, help="batch size")
-    parser.add_argument("-l", "--learning_rate", type=float, default=0.0001, help="learning rate")
-    parser.add_argument("-o", "--output_dir", type=str, default="out", help="output folder")
-    parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
-    parser.add_argument("-a", "--attention", action="store_true", help="attention u-net")
+    parser.add_argument("-d", "--dataset", type=str, help="dataset to preprocess",
+                        choices=ALL_DATASETS.keys(), required=True)
+    parser.add_argument("-c", "--config", type=str,
+                        help="path to config file", choices=ALL_CONFIGS, required=True)
+    parser.add_argument("-e", "--epochs", type=int,
+                        default=200, help="number of epochs")
+    parser.add_argument("-b", "--batch_size", type=int,
+                        default=2, help="batch size")
+    parser.add_argument("-l", "--learning_rate", type=float,
+                        default=0.0001, help="learning rate")
+    parser.add_argument("-o", "--output_dir", type=str,
+                        default="out", help="output folder")
+    parser.add_argument("-n", "--no_progress",
+                        action="store_true", help="disable progress bar")
+    parser.add_argument("-a", "--attention",
+                        action="store_true", help="attention u-net")
     args = parser.parse_args()
 
     config = load_config(args.config)
-    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size, lr=args.learning_rate, out_dir=args.output_dir, no_progress=args.no_progress, attention=args.attention)
-    
+    train(config, args.dataset, args.config, n_epochs=args.epochs, batch_size=args.batch_size,
+          lr=args.learning_rate, out_dir=args.output_dir, no_progress=args.no_progress, attention=args.attention)
+
 
 if __name__ == "__main__":
     main()

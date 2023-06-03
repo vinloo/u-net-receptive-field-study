@@ -8,7 +8,19 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import confusion_matrix
 from scipy import signal
 
-def dice_score(arr1, arr2):
+
+def dice_score(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """
+    Computes the Dice score between two binary arrays.
+
+    Args:
+        arr1 (np.ndarray): The first binary array.
+        arr2 (np.ndarray): The second binary array.
+
+    Returns:
+        float: The Dice score between the two binary arrays.
+
+    """
     intersection = np.sum(np.logical_and(arr1, arr2))
     union = np.sum(np.logical_or(arr1, arr2))
     if union + intersection == 0:
@@ -17,7 +29,18 @@ def dice_score(arr1, arr2):
     return dice_score
 
 
-def erf_rate_from_dist(erf_dist, trf):
+def erf_rate_from_dist(erf_dist: np.ndarray, trf: np.ndarray) -> float:
+    """
+    Computes the ERF rate from an ERF distribution and a TRF.
+
+    Args:
+        erf_dist (np.ndarray): The ERF distribution.
+        trf (np.ndarray): The TRF.
+
+    Returns:
+        float: The ERF rate.
+
+    """
     erf = np.mean(erf_dist, axis=2)
     start = trf[0, 0], trf[0, 1]
     len_x = trf[1, 0] - trf[0, 0] + 1
@@ -34,12 +57,23 @@ def erf_rate_from_dist(erf_dist, trf):
     for i, bin in enumerate(hist):
         if bin < np.mean(hist[i-n_range:i+n_range//2]):
             threshold = bin_centers[i]
-            erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * (1 + rf_zone[rf_zone > threshold].mean())
+            erf_rate = np.sum(rf_zone > threshold) / (len_x*len_y) * \
+                (1 + rf_zone[rf_zone > threshold].mean())
             return erf_rate
 
 
-def object_rate(center_trf, mask):
-    """Compute the object rate based on a mask and a center trf"""
+def object_rate(center_trf: np.ndarray, mask: np.ndarray) -> float:
+    """
+    Computes the object rate based on a mask and a center TRF.
+
+    Args:
+        center_trf (np.ndarray): The center TRF.
+        mask (np.ndarray): The binary mask.
+
+    Returns:
+        float: The object rate.
+
+    """
 
     len_x = center_trf[1, 0] - center_trf[0, 0] + 1
     len_y = center_trf[1, 1] - center_trf[0, 1] + 1
@@ -65,7 +99,7 @@ def object_rate(center_trf, mask):
             break
     for i, v in enumerate(rows[::-1]):
         if v:
-            end_row = len(rows) - i - 1 
+            end_row = len(rows) - i - 1
             break
 
     object_len_x = end_col - start_col + 1
@@ -74,9 +108,20 @@ def object_rate(center_trf, mask):
     object_rate = object_area / trf_area
 
     return object_rate
-    
 
-def jaccard_index(im1, im2):
+
+def jaccard_index(im1: np.ndarray, im2: np.ndarray) -> float:
+    """
+    Computes the Jaccard index between two binary images.
+
+    Args:
+        im1 (np.ndarray): The first binary image.
+        im2 (np.ndarray): The second binary image.
+
+    Returns:
+        float: The Jaccard index between the two binary images.
+
+    """
     im1 = im1.astype(bool)
     im2 = im2.astype(bool)
 
@@ -89,38 +134,71 @@ def jaccard_index(im1, im2):
     return intersection.sum() / float(union.sum())
 
 
-def specificity(im1, im2):
+def specificity(im1: np.ndarray, im2: np.ndarray) -> float:
+    """
+    Computes the specificity between two binary images.
+
+    Args:
+        im1 (np.ndarray): The first binary image.
+        im2 (np.ndarray): The second binary image.
+
+    Returns:
+        float: The specificity between the two binary images.
+
+    """
     im1 = im1.flatten().astype(bool)
     im2 = im2.flatten().astype(bool)
-    cm = confusion_matrix(im1,im2)
+    cm = confusion_matrix(im1, im2)
 
-    if cm.shape == (1,1):
+    if cm.shape == (1, 1):
         return 1
 
-    tn = cm[0,0]
-    fp = cm[0,1]
+    tn = cm[0, 0]
+    fp = cm[0, 1]
     if tn == 0:
         return 0
     specificity = tn / (tn+fp)
     return specificity
 
 
-def sensitivity(im1, im2):
+def sensitivity(im1: np.ndarray, im2: np.ndarray) -> float:
+    """
+    Computes the sensitivity between two binary images.
+
+    Args:
+        im1 (np.ndarray): The first binary image.
+        im2 (np.ndarray): The second binary image.
+
+    Returns:
+        float: The sensitivity between the two binary images.
+
+    """
     im1 = im1.flatten().astype(bool)
     im2 = im2.flatten().astype(bool)
-    cm = confusion_matrix(im1,im2)
+    cm = confusion_matrix(im1, im2)
 
-    if cm.shape == (1,1):
+    if cm.shape == (1, 1):
         return 0
 
-    tp = cm[1,1]
-    fn = cm[1,0]
+    tp = cm[1, 1]
+    fn = cm[1, 0]
     if tp == 0:
         return 0
     sensitivity = tp / (tp+fn)
     return sensitivity
 
 
-def accuracy(im1, im2):
+def accuracy(im1: np.ndarray, im2: np.ndarray) -> float:
+    """
+    Computes the accuracy between two binary images.
+
+    Args:
+        im1 (np.ndarray): The first binary image.
+        im2 (np.ndarray): The second binary image.
+
+    Returns:
+        float: The accuracy between the two binary images.
+
+    """
     acc = np.sum(im1 == im2) / (576**2)
     return acc

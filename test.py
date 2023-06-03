@@ -18,7 +18,22 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def test_model(config_name, dataset_name, device="cuda", no_progress=False, attention=False):
+
+def test_model(config_name: str, dataset_name: str, device: str = "cuda", no_progress: bool = False, attention: bool = False):
+    """
+    Tests a segmentation model on a given dataset.
+
+    Args:
+        config_name (str): The name of the configuration file to use.
+        dataset_name (str): The name of the dataset to use.
+        device (str): The device to use for testing (default is "cuda").
+        no_progress (bool): Whether to disable progress bars (default is False).
+        attention (bool): Whether to use attention gates in the model (default is False).
+
+    Returns:
+        dict: A dictionary containing the results of the testing.
+
+    """
     config = load_config(config_name)
     nlabels = ALL_DATASETS[dataset_name]["n_labels"]
     model = UNet(config, n_labels=nlabels, attention=attention).to(device)
@@ -44,13 +59,14 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False, atte
             x.requires_grad = True
             x = x.to(device)
             out = model(x)
-            
+
             # ERF rate
             out_center = out[:, li, 288, 288]
             d = torch.autograd.grad(out_center, x)[0]
             d = torch.abs(d)
             d = (d - d.min()) / (d.max() - d.min())
-            d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
+            # if all pixels are predicted 0, then d will be nan
+            d = torch.nan_to_num(d)
             erf = d.detach().cpu().numpy()
             erf = np.squeeze(erf)
             bt_erf_dist[:, :, i] = erf
@@ -58,7 +74,8 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False, atte
         bt_erf_rate = erf_rate_from_dist(bt_erf_dist, trf)
 
         # metrics after training
-        base_path = get_output_path(dataset_name, config_name, "out", attention)
+        base_path = get_output_path(
+            dataset_name, config_name, "out", attention)
         state = torch.load(f"{base_path}/best_model.pt")["model_state_dict"]
         model.load_state_dict(state)
 
@@ -81,13 +98,14 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False, atte
             x.requires_grad = True
             x = x.to(device)
             out = model(x)
-            
+
             # ERF rate
             out_center = out[:, li, 288, 288]
             d = torch.autograd.grad(out_center, x)[0]
             d = torch.abs(d)
             d = (d - d.min()) / (d.max() - d.min())
-            d = torch.nan_to_num(d) # if all pixels are predicted 0, then d will be nan
+            # if all pixels are predicted 0, then d will be nan
+            d = torch.nan_to_num(d)
             erf = d.detach().cpu().numpy()
             erf = np.squeeze(erf)
             erf_dist[:, :, i] = erf
@@ -123,7 +141,6 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False, atte
                 jaccard = jaccard_index(out, np.squeeze(y.numpy()))
                 jaccard_scores.append(jaccard)
 
-
         # ERF rate
         erf_rate = erf_rate_from_dist(erf_dist, trf)
 
@@ -146,21 +163,36 @@ def test_model(config_name, dataset_name, device="cuda", no_progress=False, atte
             "specificity": spec,
             "jaccard_score": jacc
         }
-    
+
     return results
 
 
-def main(all, dataset, config, no_progress=False, attention=False):
+def main(all: bool, dataset: str, config: str, no_progress: bool = False, attention: bool = False):
+    """
+    Runs tests on a segmentation model for one or more datasets and configurations.
+
+    Args:
+        all (bool): Whether to test all datasets.
+        dataset (str): The name of the dataset to test.
+        config (str): The name of the configuration file to use.
+        no_progress (bool): Whether to disable progress bars (default is False).
+        attention (bool): Whether to use attention gates in the model (default is False).
+
+    Returns:
+        None
+
+    """
     if dataset is None:
         assert all
         dataset = "all"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
-    
+
     if config is None:
         configurations = os.listdir("configurations")
-        configurations = [config[:-5] for config in configurations if config.endswith(".json")]
+        configurations = [config[:-5]
+                          for config in configurations if config.endswith(".json")]
         configurations.sort()
         configurations = sorted(configurations, key=len)
     else:
@@ -177,22 +209,25 @@ def main(all, dataset, config, no_progress=False, attention=False):
 
     for dataset_name in datasets:
         skip = False
-        dataset_results = {label: pd.DataFrame(columns=configurations) for label in ALL_DATASETS[dataset_name]["labels"]}
+        dataset_results = {label: pd.DataFrame(
+            columns=configurations) for label in ALL_DATASETS[dataset_name]["labels"]}
         for config_name in configurations:
             try:
-                result = test_model(config_name, dataset_name, device, no_progress=no_progress, attention=attention)
+                result = test_model(
+                    config_name, dataset_name, device, no_progress=no_progress, attention=attention)
                 for label in result:
-                    dataset_results[label][config_name] = pd.Series(result[label])
+                    dataset_results[label][config_name] = pd.Series(
+                        result[label])
             except FileNotFoundError:
-                print(f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
+                print(
+                    f"Could not find files for: {dataset_name}/{config_name}. Skipping...")
                 skip = True
-        
+
         if not skip:
             for label in dataset_results:
                 final_keys.append(f"{dataset_name}: {label}")
                 results.append(dataset_results[label].copy())
 
-    
     ct = datetime.datetime.now()
     ct = ct.strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -206,10 +241,15 @@ def main(all, dataset, config, no_progress=False, attention=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-d", "--dataset", type=str, help="dataset to preprocess", choices=ALL_DATASETS.keys())
-    parser.add_argument("-c", "--config", type=str, help="path to config file", choices=ALL_CONFIGS)
-    group.add_argument("--all", action="store_true", help="preprocess all datasets")
-    parser.add_argument("-n", "--no_progress", action="store_true", help="disable progress bar")
-    parser.add_argument("-a", "--attention", action="store_true", help="attention u-net")
+    group.add_argument("-d", "--dataset", type=str,
+                       help="dataset to preprocess", choices=ALL_DATASETS.keys())
+    parser.add_argument("-c", "--config", type=str,
+                        help="path to config file", choices=ALL_CONFIGS)
+    group.add_argument("--all", action="store_true",
+                       help="preprocess all datasets")
+    parser.add_argument("-n", "--no_progress",
+                        action="store_true", help="disable progress bar")
+    parser.add_argument("-a", "--attention",
+                        action="store_true", help="attention u-net")
     args = parser.parse_args()
     main(args.all, args.dataset, args.config, args.no_progress, args.attention)

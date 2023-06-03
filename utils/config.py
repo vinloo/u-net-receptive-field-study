@@ -5,8 +5,22 @@ from sys import exit
 
 ALL_CONFIGS = ["trf54", "trf100", "trf146", "trf204", "trf230", "trf298", "trf360", "trf412", "trf486", "trf570"]
 
+def load_config(config_name: str) -> DotMap:
+    """
+    Loads a configuration file and validates its contents.
 
-def load_config(config_name):
+    Args:
+        config_name (str): The name of the configuration file.
+
+    Returns:
+        DotMap: A DotMap object representing the configuration.
+
+    Raises:
+        json.decoder.JSONDecodeError: If the configuration file is invalid.
+        AttributeError: If the configuration file is missing an attribute.
+        AssertionError: If the configuration file contains invalid values.
+
+    """
     try:
         config = json.load(open(f"configurations/{config_name}.json"))
         config = DotMap(config, _dynamic=False)
