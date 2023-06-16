@@ -147,7 +147,47 @@ ALL_DATASETS = {
         "labels": ["shapes"],
         "n_labels": 1,
     },
-    "shapes_b": {
+    "shapes_b": { 
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_c": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_d": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_e": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_f": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_a_large": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_b_large": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_a_contour": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_b_contour": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_a_large_contour": {
+        "labels": ["shapes"],
+        "n_labels": 1,
+    },
+    "shapes_b_large_contour": {
         "labels": ["shapes"],
         "n_labels": 1,
     },

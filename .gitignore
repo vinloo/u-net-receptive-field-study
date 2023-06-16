@@ -9,5 +9,6 @@ preprocessing_hidden.py
 
 *.pt
 *.zip
+*.pgf
 
 __pycache__
