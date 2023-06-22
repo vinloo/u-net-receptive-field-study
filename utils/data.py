@@ -99,34 +99,6 @@ ALL_DATASETS = {
         "labels": ["head"],
         "n_labels": 1,
     },
-    "breast_cancer": {
-        "labels": ["cancer"],
-        "n_labels": 1,
-    },
-    "mouse_embryo": {
-        "labels": ["body", "bv"],
-        "n_labels": 2,
-    },
-    "covid": {
-        "labels": ["infection"],
-        "n_labels": 1,
-    },
-    "covid_2": {
-        "labels": ["infection"],
-        "n_labels": 1,
-    },
-    "pancreas": {
-        "labels": ["pancreas"],
-        "n_labels": 1,
-    },
-    "brain_tumor": {
-        "labels": ["tumor"],
-        "n_labels": 1,
-    },
-    "prostate": {
-        "labels": ["prostate"],
-        "n_labels": 1,
-    },
     "kidney": {
         "labels": ["kidney"],
         "n_labels": 1,
@@ -148,22 +120,6 @@ ALL_DATASETS = {
         "n_labels": 1,
     },
     "shapes_b": { 
-        "labels": ["shapes"],
-        "n_labels": 1,
-    },
-    "shapes_c": {
-        "labels": ["shapes"],
-        "n_labels": 1,
-    },
-    "shapes_d": {
-        "labels": ["shapes"],
-        "n_labels": 1,
-    },
-    "shapes_e": {
-        "labels": ["shapes"],
-        "n_labels": 1,
-    },
-    "shapes_f": {
         "labels": ["shapes"],
         "n_labels": 1,
     },
