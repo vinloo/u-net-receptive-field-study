@@ -12,3 +12,8 @@ preprocessing_hidden.py
 *.pgf
 
 __pycache__
+
+recommender-tool/example/kidneys
+recommender-tool/example/lungs
+recommender-tool/example/nerve
+recommender-tool/example/fetal_head
