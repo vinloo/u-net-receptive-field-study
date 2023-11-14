@@ -4,7 +4,7 @@ nibabel==5.1.0
 numpy==1.23.5
 opencv_python==4.7.0.72
 pandas==1.5.3
-Pillow==9.5.0
+Pillow==10.0.1
 pydicom==2.3.1
 scikit_learn==1.2.2
 scipy==1.10.1
