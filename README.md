@@ -101,8 +101,5 @@ Run `python tool.py` with the following arguments:
 | -f | --file_type | No | str | 'png' | The file extension of the images and masks. Default is 'png'. |
 | -t | --contrast_threshold | No | float | 0.1 | The threshold value for contrast. Default is 0.1. |
 
-### As a Python module
-**Coming Soon!**
-
 ## Citing this work
 > Vincent Loos, Rohit Pardasani, Navchetan Awasthi, Demystifying the effect of receptive field size in U-Net models for medical image segmentation, J. Med. Imag. 11(5), 054004 (2024), doi: 10.1117/1.JMI.11.5.054004.
