@@ -2,7 +2,7 @@
 
 ## Datasets
 ### Synthtic Shapes Datasets
-> **TODO** insert citation
+> Vincent Loos, Rohit Pardasani, Navchetan Awasthi, Demystifying the effect of receptive field size in U-Net models for medical image segmentation, J. Med. Imag. 11(5), 054004 (2024), doi: 10.1117/1.JMI.11.5.054004.
 
 The preprocessed synthetic datasets with predefined shapes as described in the paper [can be downloaded here](https://github.com/vinloo/u-net-receptive-field-study/releases/tag/v0.1.0) and can be extracted and used directly. 
 
@@ -105,4 +105,4 @@ Run `python tool.py` with the following arguments:
 **Coming Soon!**
 
 ## Citing this work
-> **TODO** insert citation
+> Vincent Loos, Rohit Pardasani, Navchetan Awasthi, Demystifying the effect of receptive field size in U-Net models for medical image segmentation, J. Med. Imag. 11(5), 054004 (2024), doi: 10.1117/1.JMI.11.5.054004.
