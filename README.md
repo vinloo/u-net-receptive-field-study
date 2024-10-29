@@ -1,5 +1,5 @@
 # Study of Receptive Field of U-Net and Attention U-Net 
-
+Link to the paper: [https://doi.org/10.1117/1.JMI.11.5.054004](https://doi.org/10.1117/1.JMI.11.5.054004)
 ## Datasets
 ### Synthtic Shapes Datasets
 > Vincent Loos, Rohit Pardasani, Navchetan Awasthi, Demystifying the effect of receptive field size in U-Net models for medical image segmentation, J. Med. Imag. 11(5), 054004 (2024), doi: 10.1117/1.JMI.11.5.054004.
